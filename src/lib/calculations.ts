@@ -5,6 +5,7 @@
  * - Equal splits among claimants
  * - Custom portions (e.g., someone had 2 of 4 beers)
  * - Proportional tax/tip distribution
+ * - Fair penny distribution using Largest Remainder Method
  */
 
 interface Item {
@@ -53,11 +54,55 @@ export interface PersonTotal {
 }
 
 /**
+ * Distribute pennies fairly using the Largest Remainder Method
+ * This ensures the sum of rounded values equals the target total
+ */
+function distributeRemainder(
+  values: { index: number; exact: number }[],
+  targetTotal: number
+): number[] {
+  if (values.length === 0) return [];
+  
+  // Convert to cents for precise integer math
+  const targetCents = Math.round(targetTotal * 100);
+  
+  // Floor all values and track remainders
+  const floored = values.map(v => ({
+    index: v.index,
+    cents: Math.floor(v.exact * 100),
+    remainder: (v.exact * 100) - Math.floor(v.exact * 100),
+  }));
+  
+  // Calculate how many pennies we need to distribute
+  const flooredSum = floored.reduce((sum, v) => sum + v.cents, 0);
+  let penniesToDistribute = targetCents - flooredSum;
+  
+  // Sort by remainder (descending) to give pennies to those with largest remainders
+  const sortedByRemainder = [...floored].sort((a, b) => b.remainder - a.remainder);
+  
+  // Distribute pennies one at a time to those with largest remainders
+  for (const item of sortedByRemainder) {
+    if (penniesToDistribute <= 0) break;
+    const original = floored.find(f => f.index === item.index);
+    if (original) {
+      original.cents += 1;
+      penniesToDistribute -= 1;
+    }
+  }
+  
+  // Convert back to dollars and return in original order
+  const result = new Array(values.length).fill(0);
+  for (const item of floored) {
+    result[item.index] = item.cents / 100;
+  }
+  
+  return result;
+}
+
+/**
  * Calculate how much each person owes for a bill
  */
 export function calculateSplits(bill: BillWithDetails): PersonTotal[] {
-  const results: PersonTotal[] = [];
-  
   // Group claims by item to calculate total portions for each item
   const itemPortions: Record<string, number> = {};
   for (const claim of bill.claims) {
@@ -67,11 +112,23 @@ export function calculateSplits(bill: BillWithDetails): PersonTotal[] {
     itemPortions[claim.itemId] += claim.portion;
   }
   
-  // Calculate each person's total
+  // First pass: calculate exact (unrounded) amounts for each person
+  const exactResults: {
+    share: Share;
+    claims: Claim[];
+    exactItemsTotal: number;
+    exactTaxShare: number;
+    exactTipShare: number;
+    exactGrandTotal: number;
+    itemBreakdown: PersonTotal['itemBreakdown'];
+  }[] = [];
+  
+  const billSubtotal = bill.subtotal || bill.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  
   for (const share of bill.shares) {
     const shareClaims = bill.claims.filter(c => c.shareId === share.id);
     
-    let itemsTotal = 0;
+    let exactItemsTotal = 0;
     const itemBreakdown: PersonTotal['itemBreakdown'] = [];
     
     for (const claim of shareClaims) {
@@ -81,9 +138,9 @@ export function calculateSplits(bill: BillWithDetails): PersonTotal[] {
       const totalItemCost = item.price * item.quantity;
       const totalPortions = itemPortions[item.id] || 1;
       
-      // Calculate this person's share of the item
+      // Calculate this person's exact share of the item (no rounding yet)
       const amountOwed = (totalItemCost * claim.portion) / totalPortions;
-      itemsTotal += amountOwed;
+      exactItemsTotal += amountOwed;
       
       // Count how many people are sharing this item
       const sharedWith = bill.claims.filter(c => c.itemId === item.id).length;
@@ -93,29 +150,48 @@ export function calculateSplits(bill: BillWithDetails): PersonTotal[] {
         itemName: item.name,
         itemPrice: item.price,
         portion: claim.portion,
-        amountOwed: Math.round(amountOwed * 100) / 100,
+        amountOwed: Math.round(amountOwed * 100) / 100, // Round for display
         sharedWith,
       });
     }
     
-    // Calculate proportional tax and tip based on items total
-    // This ensures people who ordered more expensive items pay proportionally more tax/tip
-    const billSubtotal = bill.subtotal || bill.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-    const proportion = billSubtotal > 0 ? itemsTotal / billSubtotal : 0;
+    // Calculate proportional tax and tip (exact values)
+    const proportion = billSubtotal > 0 ? exactItemsTotal / billSubtotal : 0;
+    const exactTaxShare = bill.taxAmount * proportion;
+    const exactTipShare = bill.tipAmount * proportion;
     
-    const taxShare = bill.taxAmount * proportion;
-    const tipShare = bill.tipAmount * proportion;
-    
-    results.push({
-      shareId: share.id,
-      name: share.name,
-      itemsTotal: Math.round(itemsTotal * 100) / 100,
-      taxShare: Math.round(taxShare * 100) / 100,
-      tipShare: Math.round(tipShare * 100) / 100,
-      grandTotal: Math.round((itemsTotal + taxShare + tipShare) * 100) / 100,
+    exactResults.push({
+      share,
+      claims: shareClaims,
+      exactItemsTotal,
+      exactTaxShare,
+      exactTipShare,
+      exactGrandTotal: exactItemsTotal + exactTaxShare + exactTipShare,
       itemBreakdown,
     });
   }
+  
+  // Calculate what the total should be (sum of claimed items + tax + tip)
+  const totalClaimedItems = exactResults.reduce((sum, r) => sum + r.exactItemsTotal, 0);
+  const targetTotal = totalClaimedItems + bill.taxAmount + bill.tipAmount;
+  
+  // Use Largest Remainder Method to distribute pennies fairly for grand totals
+  const grandTotalValues = exactResults.map((r, i) => ({
+    index: i,
+    exact: r.exactGrandTotal,
+  }));
+  const distributedGrandTotals = distributeRemainder(grandTotalValues, targetTotal);
+  
+  // Build final results with fair penny distribution
+  const results: PersonTotal[] = exactResults.map((r, i) => ({
+    shareId: r.share.id,
+    name: r.share.name,
+    itemsTotal: Math.round(r.exactItemsTotal * 100) / 100,
+    taxShare: Math.round(r.exactTaxShare * 100) / 100,
+    tipShare: Math.round(r.exactTipShare * 100) / 100,
+    grandTotal: distributedGrandTotals[i], // Use the fairly distributed total
+    itemBreakdown: r.itemBreakdown,
+  }));
   
   return results;
 }

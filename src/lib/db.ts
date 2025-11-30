@@ -11,7 +11,7 @@ function createPrismaClient() {
   // Get the absolute path to the database file (in project root)
   const dbPath = path.join(process.cwd(), "dev.db");
   
-  console.log("[Prisma] Creating client with db path:", dbPath);
+  // Database path for debugging: dbPath
   
   // Prisma 7 adapter takes a config object with url
   const adapter = new PrismaBetterSqlite3({ url: dbPath });
