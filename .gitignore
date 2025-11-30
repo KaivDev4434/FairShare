@@ -39,3 +39,33 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Prisma generated files
+/src/generated/prisma
+
+# Database files
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+python-service/venv/
+python-service/.venv/
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Test files (remove if you want to keep sample receipts)
+*.pdf
+*.jpeg
+*.jpg
+*.png
+!public/*.svg

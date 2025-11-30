@@ -1,0 +1,54 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Bill {
+  id        String   @id @default(cuid())
+  name      String   // "Costco Run - Nov 30"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  locked    Boolean  @default(false) // Admin can lock when done
+  items     Item[]
+  shares    Share[]
+  taxAmount Float    @default(0)
+  tipAmount Float    @default(0)
+  subtotal  Float    @default(0)
+  total     Float    @default(0)
+}
+
+model Item {
+  id       String  @id @default(cuid())
+  name     String
+  price    Float
+  quantity Int     @default(1)
+  billId   String
+  bill     Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
+  claims   Claim[]
+}
+
+model Share {
+  id       String  @id @default(cuid())
+  name     String  // Roommate name
+  billId   String
+  bill     Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
+  claims   Claim[]
+}
+
+model Claim {
+  id       String @id @default(cuid())
+  shareId  String
+  itemId   String
+  portion  Float  @default(1) // 1 = full, 0.5 = half, etc.
+  share    Share  @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  item     Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([shareId, itemId]) // One claim per share-item combination
+}
