@@ -48,6 +48,7 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/src/generated ./src/generated
 COPY --from=builder /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/scripts ./scripts
 
 # Set correct permissions
 RUN chown -R nextjs:nodejs /app
@@ -58,8 +59,10 @@ EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV DATA_DIR="/app/data"
 
 # Volume for persistent data
 VOLUME ["/app/data"]
 
-CMD ["node", "server.js"]
+# Initialize database and start server
+CMD ["sh", "-c", "node scripts/init-db.js && node server.js"]
