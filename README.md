@@ -177,6 +177,10 @@ docker logs fairshare-tunnel 2>&1 | grep trycloudflare
 - [x] Lock/unlock bills
 - [x] Add items manually anytime
 
+### v1.1 — UX Improvements 🔜
+- [ ] **Sticky Selected User Total** — Show the selected user's total box pinned at the top
+- [ ] **Performance Optimization** — Reduce lag and improve responsiveness
+
 ### v2.0 — Planned Features 🚧
 - [ ] **User Authentication** — Sign in with email/OAuth
 - [ ] **User Profiles** — Track your personal spending history
