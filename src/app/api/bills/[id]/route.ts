@@ -117,6 +117,28 @@ export async function DELETE(
   try {
     const { id } = await params;
     
+    // Delete in order to handle foreign key constraints
+    // First delete all claims for items in this bill
+    await db.claim.deleteMany({
+      where: {
+        item: { billId: id }
+      }
+    });
+    
+    // Delete all claims for shares in this bill
+    await db.claim.deleteMany({
+      where: {
+        share: { billId: id }
+      }
+    });
+    
+    // Delete all items
+    await db.item.deleteMany({ where: { billId: id } });
+    
+    // Delete all shares
+    await db.share.deleteMany({ where: { billId: id } });
+    
+    // Finally delete the bill
     await db.bill.delete({ where: { id } });
     
     return NextResponse.json({ success: true });
