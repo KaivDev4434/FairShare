@@ -9,7 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@libsql/client": "^0.15.15",
     "@prisma/adapter-better-sqlite3": "^7.0.1",
+    "@prisma/adapter-libsql": "^7.0.1",
     "@prisma/client": "^7.0.1",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-dialog": "^1.1.15",

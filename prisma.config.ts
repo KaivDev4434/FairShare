@@ -3,12 +3,17 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+// Use Turso URL for migrations if available, otherwise local SQLite
+const databaseUrl = process.env.TURSO_DATABASE_URL 
+  ? `${process.env.TURSO_DATABASE_URL}?authToken=${process.env.TURSO_AUTH_TOKEN}`
+  : "file:./dev.db";
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: "file:./dev.db",
+    url: databaseUrl,
   },
 });

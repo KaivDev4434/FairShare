@@ -1,31 +1,28 @@
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaLibSQL } from "@prisma/adapter-libsql";
+import { createClient } from "@libsql/client";
 import path from "path";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
-  prismaDbPath: string | undefined;
 };
 
 function createPrismaClient() {
-  // Get the absolute path to the database file (in project root)
+  // Use Turso in production (when TURSO_DATABASE_URL is set)
+  if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
+    const libsql = createClient({
+      url: process.env.TURSO_DATABASE_URL,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    });
+    const adapter = new PrismaLibSQL(libsql);
+    return new PrismaClient({ adapter });
+  }
+  
+  // Fall back to SQLite for local development
   const dbPath = path.join(process.cwd(), "dev.db");
-  
-  // Database path for debugging: dbPath
-  
-  // Prisma 7 adapter takes a config object with url
   const adapter = new PrismaBetterSqlite3({ url: dbPath });
-  
-  // Store the path for cache invalidation
-  globalForPrisma.prismaDbPath = dbPath;
-  
   return new PrismaClient({ adapter });
-}
-
-// Invalidate cache if db path changed
-const currentDbPath = path.join(process.cwd(), "dev.db");
-if (globalForPrisma.prismaDbPath !== currentDbPath) {
-  globalForPrisma.prisma = undefined;
 }
 
 export const db = globalForPrisma.prisma ?? createPrismaClient();
