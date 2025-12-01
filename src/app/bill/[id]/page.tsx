@@ -84,6 +84,9 @@ export default function BillPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
   const [newPersonName, setNewPersonName] = useState('');
+  const [showAddItemDialog, setShowAddItemDialog] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemPrice, setNewItemPrice] = useState('');
 
   // Flatten claims from shares
   const allClaims: Claim[] = bill?.shares.flatMap(share => 
@@ -220,6 +223,60 @@ export default function BillPage() {
     }
   };
 
+  const handleUnlockBill = async () => {
+    try {
+      await fetch(`/api/bills/${billId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locked: false }),
+      });
+      await fetchBill();
+      toast.success('Bill unlocked! Selections can now be changed.');
+    } catch (error) {
+      toast.error('Failed to unlock bill');
+    }
+  };
+
+  const handleAddItem = async () => {
+    if (!newItemName.trim() || !newItemPrice) {
+      toast.error('Please enter item name and price');
+      return;
+    }
+    
+    const price = parseFloat(newItemPrice);
+    if (isNaN(price) || price <= 0) {
+      toast.error('Please enter a valid price');
+      return;
+    }
+    
+    try {
+      // Get current items and add the new one
+      const updatedItems = [
+        ...(bill?.items || []).map(item => ({
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+        })),
+        { name: newItemName.trim(), price, quantity: 1 }
+      ];
+      
+      await fetch(`/api/bills/${billId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: updatedItems }),
+      });
+      
+      await fetchBill();
+      await fetchSplits();
+      setShowAddItemDialog(false);
+      setNewItemName('');
+      setNewItemPrice('');
+      toast.success('Item added!');
+    } catch (error) {
+      toast.error('Failed to add item');
+    }
+  };
+
   const copyShareLink = () => {
     navigator.clipboard.writeText(window.location.href);
     toast.success('Link copied to clipboard!');
@@ -268,12 +325,19 @@ export default function BillPage() {
               </svg>
               Share
             </Button>
-            {!bill.locked && (
+            {!bill.locked ? (
               <Button variant="outline" size="sm" onClick={handleLockBill} className="border-zinc-700">
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
                 Lock Bill
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={handleUnlockBill} className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                </svg>
+                Unlock Bill
               </Button>
             )}
           </div>
@@ -340,6 +404,22 @@ export default function BillPage() {
             )}
 
             {/* Items */}
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Items</h2>
+              {!bill.locked && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAddItemDialog(true)}
+                  className="border-zinc-700"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Item
+                </Button>
+              )}
+            </div>
             <SelectionGrid
               items={bill.items}
               shares={bill.shares}
@@ -394,6 +474,48 @@ export default function BillPage() {
               className="w-full bg-emerald-600 hover:bg-emerald-700"
             >
               Join Bill
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Item Dialog */}
+      <Dialog open={showAddItemDialog} onOpenChange={setShowAddItemDialog}>
+        <DialogContent className="bg-zinc-900 border-zinc-800">
+          <DialogHeader>
+            <DialogTitle>Add Item</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-zinc-400">
+              Add a new item to the bill
+            </p>
+            <Input
+              placeholder="Item name..."
+              value={newItemName}
+              onChange={(e) => setNewItemName(e.target.value)}
+              className="bg-zinc-800 border-zinc-700"
+              autoFocus
+            />
+            <Input
+              placeholder="Price (e.g., 9.99)"
+              type="number"
+              step="0.01"
+              min="0"
+              value={newItemPrice}
+              onChange={(e) => setNewItemPrice(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newItemName.trim() && newItemPrice) {
+                  handleAddItem();
+                }
+              }}
+              className="bg-zinc-800 border-zinc-700"
+            />
+            <Button
+              onClick={handleAddItem}
+              disabled={!newItemName.trim() || !newItemPrice}
+              className="w-full bg-emerald-600 hover:bg-emerald-700"
+            >
+              Add Item
             </Button>
           </div>
         </DialogContent>
