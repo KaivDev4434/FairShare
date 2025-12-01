@@ -47,6 +47,17 @@ next-env.d.ts
 
 # Database files
 *.db
+*.db-wal
+*.db-shm
+data/
+
+# Turso CLI cache
+create
+create-wal
+list
+list-wal
+show
+show-wal
 
 # Python
 __pycache__/

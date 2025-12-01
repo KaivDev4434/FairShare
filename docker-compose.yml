@@ -1,45 +1,45 @@
 version: '3.8'
 
 services:
-  # Next.js Application
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  # Main FairShare Next.js App
+  fairshare:
+    build: .
+    container_name: fairshare-app
+    restart: unless-stopped
     ports:
       - "3001:3000"
+    volumes:
+      - fairshare-data:/app/data
     environment:
       - NODE_ENV=production
       - DOCLING_SERVICE_URL=http://docling:8000
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - OLLAMA_MODEL=llama3:8b
-      # Add your Perplexity API key here or use .env file
-      # - PERPLEXITY_API_KEY=your_key_here
-    volumes:
-      - ./dev.db:/app/dev.db
     depends_on:
       - docling
-    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
-  # Python Docling Service (OCR)
+  # Document Parsing Service (Docling)
   docling:
-    build:
-      context: ./python-service
-      dockerfile: Dockerfile
+    build: ./python-service
+    container_name: fairshare-docling
+    restart: unless-stopped
     ports:
       - "8000:8000"
-    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
 
-# Optional: Add Ollama if you want it containerized too
-# Note: Ollama with GPU requires nvidia-docker
-#  ollama:
-#    image: ollama/ollama
-#    ports:
-#      - "11434:11434"
-#    volumes:
-#      - ollama_data:/root/.ollama
-#    restart: unless-stopped
+  # Cloudflare Tunnel for external access (optional)
+  # Uncomment if you want external access without port forwarding
+  # tunnel:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: fairshare-tunnel
+  #   restart: unless-stopped
+  #   command: tunnel --url http://fairshare:3000
+  #   depends_on:
+  #     - fairshare
 
 volumes:
-  ollama_data:
-
+  fairshare-data:
+    driver: local
