@@ -15,6 +15,7 @@ services:
       - DOCLING_SERVICE_URL=http://docling:8000
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - OLLAMA_MODEL=qwen2:1.5b
+      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY}
       - AUTH_SECRET=${AUTH_SECRET}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}

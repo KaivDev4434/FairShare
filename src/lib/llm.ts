@@ -19,10 +19,15 @@ export interface BillData {
   total: number;
 }
 
-const EXTRACTION_PROMPT = `Extract all items and prices from this bill as JSON.
-Be precise with prices - include cents.
-If quantity is not specified, assume 1.
-Only include actual purchasable items, not headers or categories.
+const EXTRACTION_PROMPT = `Extract all items and prices from this bill/receipt as JSON.
+
+IMPORTANT RULES:
+1. "price" = the PER-UNIT price (if Qty:16 costs $3.36 total, then price = 3.36/16 = 0.21)
+2. "quantity" = how many units were purchased
+3. Line total = price × quantity
+4. If quantity is not shown, assume quantity=1 and price is the shown amount
+5. Only include actual purchasable items, not headers, categories, fees, or totals
+6. Extract the subtotal (before tax), tax amount, and total from the receipt
 
 Bill content:
 {MARKDOWN}
@@ -31,9 +36,11 @@ Return ONLY valid JSON in this exact format, no markdown code blocks:
 {
   "items": [{"name": "string", "price": number, "quantity": number}],
   "subtotal": number,
-  "tax": number,
+  "tax": number, 
   "total": number
-}`;
+}
+
+VERIFY: sum of (price × quantity) for all items should ≈ subtotal.`;
 
 /**
  * Validate extracted bill data
@@ -60,15 +67,17 @@ function validateBillData(data: unknown): data is BillData {
   if (typeof bill.tax !== 'number') return false;
   if (typeof bill.total !== 'number') return false;
   
-  // Sanity check: total should roughly match sum of items (within 50% for fees/discounts)
+  // Sanity check: sum of (price × quantity) should roughly match subtotal/total
   const itemSum = bill.items.reduce((sum: number, item: { price: number; quantity?: number }) => {
     return sum + (item.price * (item.quantity || 1));
   }, 0);
   
-  if (bill.total > 0 && itemSum > 0) {
-    const ratio = bill.total / itemSum;
-    if (ratio < 0.5 || ratio > 2) {
-      console.warn('Total/items ratio seems off:', { total: bill.total, itemSum, ratio });
+  // Check against subtotal (more accurate) or total
+  const compareValue = bill.subtotal > 0 ? bill.subtotal : bill.total;
+  if (compareValue > 0 && itemSum > 0) {
+    const ratio = compareValue / itemSum;
+    if (ratio < 0.7 || ratio > 1.5) {
+      console.warn('Subtotal/items ratio seems off:', { subtotal: bill.subtotal, total: bill.total, itemSum, ratio });
       // Don't fail validation, just warn - there might be discounts, fees, etc.
     }
   }
