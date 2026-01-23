@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { SelectionGrid } from '@/components/SelectionGrid';
@@ -16,6 +16,23 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+
+// Debounce helper
+function useDebounce<T extends (...args: Parameters<T>) => void>(
+  callback: T,
+  delay: number
+): T {
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  return useCallback((...args: Parameters<T>) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => {
+      callback(...args);
+    }, delay);
+  }, [callback, delay]) as T;
+}
 
 interface Item {
   id: string;
@@ -87,15 +104,39 @@ export default function BillPage() {
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
   const [newItemName, setNewItemName] = useState('');
   const [newItemPrice, setNewItemPrice] = useState('');
+  
+  // Optimistic updates: local claims state for instant UI feedback
+  const [optimisticClaims, setOptimisticClaims] = useState<Map<string, number>>(new Map());
+  const pendingClaimsRef = useRef<Set<string>>(new Set());
 
-  // Flatten claims from shares
-  const allClaims: Claim[] = bill?.shares.flatMap(share => 
-    share.claims.map(claim => ({
-      shareId: share.id,
-      itemId: claim.itemId,
-      portion: claim.portion,
-    }))
-  ) || [];
+  // Flatten claims from shares + merge with optimistic updates
+  const allClaims: Claim[] = useMemo(() => {
+    const serverClaims = bill?.shares.flatMap(share => 
+      share.claims.map(claim => ({
+        shareId: share.id,
+        itemId: claim.itemId,
+        portion: claim.portion,
+      }))
+    ) || [];
+    
+    // Apply optimistic updates on top of server state
+    const claimsMap = new Map<string, Claim>();
+    serverClaims.forEach(claim => {
+      claimsMap.set(`${claim.shareId}-${claim.itemId}`, claim);
+    });
+    
+    // Apply optimistic changes
+    optimisticClaims.forEach((portion, key) => {
+      const [shareId, itemId] = key.split('-');
+      if (portion === 0) {
+        claimsMap.delete(key);
+      } else {
+        claimsMap.set(key, { shareId, itemId, portion });
+      }
+    });
+    
+    return Array.from(claimsMap.values());
+  }, [bill?.shares, optimisticClaims]);
 
   const fetchBill = useCallback(async () => {
     try {
@@ -186,7 +227,27 @@ export default function BillPage() {
     }
   };
 
+  // Debounced server sync for splits recalculation
+  const debouncedFetchSplits = useDebounce(fetchSplits, 300);
+
   const handleClaimChange = async (shareId: string, itemId: string, portion: number) => {
+    const key = `${shareId}-${itemId}`;
+    
+    // Skip if already processing this exact claim
+    if (pendingClaimsRef.current.has(key)) {
+      return;
+    }
+    
+    // Optimistic update: immediately update local state
+    setOptimisticClaims(prev => {
+      const next = new Map(prev);
+      next.set(key, portion);
+      return next;
+    });
+    
+    // Mark as pending
+    pendingClaimsRef.current.add(key);
+    
     try {
       if (portion === 0) {
         // Remove claim
@@ -202,10 +263,26 @@ export default function BillPage() {
         });
       }
       
+      // Clear this optimistic update after server confirms
+      setOptimisticClaims(prev => {
+        const next = new Map(prev);
+        next.delete(key);
+        return next;
+      });
+      
+      // Fetch updated data (debounced to batch rapid changes)
       await fetchBill();
-      await fetchSplits();
+      debouncedFetchSplits();
     } catch (error) {
+      // Revert optimistic update on error
+      setOptimisticClaims(prev => {
+        const next = new Map(prev);
+        next.delete(key);
+        return next;
+      });
       toast.error('Failed to update selection');
+    } finally {
+      pendingClaimsRef.current.delete(key);
     }
   };
 
@@ -367,6 +444,39 @@ export default function BillPage() {
             })}
           </p>
         </div>
+
+        {/* Sticky Selected User Total - Shows when a user is selected */}
+        {currentShareId && splits?.splits && (() => {
+          const selectedSplit = splits.splits.find(s => s.shareId === currentShareId);
+          if (!selectedSplit) return null;
+          const formatCurrency = (amount: number) => 
+            new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+          return (
+            <div className="mb-6 animate-in fade-in slide-in-from-top-2 duration-300">
+              <Card className="p-4 border-emerald-600 bg-gradient-to-r from-emerald-600/10 to-teal-600/10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-xl font-bold">
+                      {selectedSplit.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm text-zinc-400">Your Total</p>
+                      <p className="font-semibold text-lg">{selectedSplit.name}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-3xl font-bold text-emerald-400">
+                      {formatCurrency(selectedSplit.grandTotal)}
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      {selectedSplit.itemBreakdown.length} item{selectedSplit.itemBreakdown.length !== 1 ? 's' : ''} selected
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          );
+        })()}
 
         {/* Main Content */}
         <div className="grid lg:grid-cols-5 gap-8">

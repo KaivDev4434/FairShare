@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { UserMenu } from '@/components/UserMenu';
 import { toast } from 'sonner';
 import { calculateBalances, suggestSettlements, formatCurrency } from '@/lib/calculations';
 
@@ -138,14 +139,17 @@ export default function DashboardPage() {
             </div>
             <span className="text-xl font-semibold">FairShare</span>
           </Link>
-          <Link href="/">
-            <Button className="bg-emerald-600 hover:bg-emerald-700">
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              New Bill
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/">
+              <Button className="bg-emerald-600 hover:bg-emerald-700">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                New Bill
+              </Button>
+            </Link>
+            <UserMenu />
+          </div>
         </div>
       </header>
 

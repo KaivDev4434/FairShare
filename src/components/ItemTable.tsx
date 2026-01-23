@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -38,8 +37,6 @@ export function ItemTable({
   onTaxChange,
   onTipChange,
 }: ItemTableProps) {
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = subtotal + taxAmount + tipAmount;
 
@@ -57,15 +54,13 @@ export function ItemTable({
 
   const handleAddItem = () => {
     if (!onItemsChange) return;
-    onItemsChange([...items, { name: 'New Item', price: 0, quantity: 1 }]);
-    setEditingIndex(items.length);
+    onItemsChange([...items, { name: '', price: 0, quantity: 1 }]);
   };
 
   const handleRemoveItem = (index: number) => {
     if (!onItemsChange) return;
     const newItems = items.filter((_, i) => i !== index);
     onItemsChange(newItems);
-    setEditingIndex(null);
   };
 
   const formatCurrency = (amount: number) => {
@@ -92,21 +87,15 @@ export function ItemTable({
             {items.map((item, index) => (
               <TableRow key={index} className="border-zinc-800">
                 <TableCell>
-                  {editable && editingIndex === index ? (
+                  {editable ? (
                     <Input
                       value={item.name}
                       onChange={(e) => handleItemChange(index, 'name', e.target.value)}
-                      onBlur={() => setEditingIndex(null)}
                       className="bg-zinc-900 border-zinc-700 h-8"
-                      autoFocus
+                      placeholder="Item name..."
                     />
                   ) : (
-                    <span
-                      className={editable ? 'cursor-pointer hover:text-emerald-400' : ''}
-                      onClick={() => editable && setEditingIndex(index)}
-                    >
-                      {item.name}
-                    </span>
+                    <span>{item.name}</span>
                   )}
                 </TableCell>
                 <TableCell className="text-right">

@@ -1,5 +1,6 @@
 'use client';
 
+import { memo, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
@@ -26,7 +27,7 @@ interface TotalsSummaryProps {
   highlightShareId?: string | null;
 }
 
-export function TotalsSummary({ splits, billTotal, highlightShareId }: TotalsSummaryProps) {
+export const TotalsSummary = memo(function TotalsSummary({ splits, billTotal, highlightShareId }: TotalsSummaryProps) {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -34,8 +35,10 @@ export function TotalsSummary({ splits, billTotal, highlightShareId }: TotalsSum
     }).format(amount);
   };
 
-  const totalClaimed = splits.reduce((sum, p) => sum + p.grandTotal, 0);
-  const unclaimed = billTotal - totalClaimed;
+  const { totalClaimed, unclaimed } = useMemo(() => {
+    const claimed = splits.reduce((sum, p) => sum + p.grandTotal, 0);
+    return { totalClaimed: claimed, unclaimed: billTotal - claimed };
+  }, [splits, billTotal]);
 
   if (splits.length === 0) {
     return (
@@ -156,5 +159,5 @@ export function TotalsSummary({ splits, billTotal, highlightShareId }: TotalsSum
       )}
     </div>
   );
-}
+});
 

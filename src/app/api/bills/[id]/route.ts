@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { auth } from '@/lib/auth';
 
-// GET /api/bills/[id] - Get a single bill with all details
+// Helper to check if user owns the bill
+async function checkOwnership(billId: string, userId: string | undefined): Promise<boolean> {
+  if (!userId) return false;
+  const bill = await db.bill.findUnique({ where: { id: billId }, select: { userId: true } });
+  return bill?.userId === userId;
+}
+
+// GET /api/bills/[id] - Get a single bill with all details (public for sharing)
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -46,13 +54,24 @@ export async function GET(
   }
 }
 
-// PATCH /api/bills/[id] - Update a bill
+// PATCH /api/bills/[id] - Update a bill (owner or no owner)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+    const session = await auth();
+    
+    // Check ownership if bill has an owner
+    const bill = await db.bill.findUnique({ where: { id }, select: { userId: true } });
+    if (bill?.userId && !await checkOwnership(id, session?.user?.id)) {
+      return NextResponse.json(
+        { error: 'You do not have permission to edit this bill' },
+        { status: 403 }
+      );
+    }
+    
     const body = await request.json();
     const { name, taxAmount, tipAmount, locked, items } = body;
     
@@ -109,13 +128,23 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/bills/[id] - Delete a bill
+// DELETE /api/bills/[id] - Delete a bill (owner only)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+    const session = await auth();
+    
+    // Check ownership if bill has an owner
+    const bill = await db.bill.findUnique({ where: { id }, select: { userId: true } });
+    if (bill?.userId && !await checkOwnership(id, session?.user?.id)) {
+      return NextResponse.json(
+        { error: 'You do not have permission to delete this bill' },
+        { status: 403 }
+      );
+    }
     
     // Delete in order to handle foreign key constraints
     // First delete all claims for items in this bill

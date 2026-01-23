@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { auth } from '@/lib/auth';
 
-// GET /api/bills - List all bills
+// GET /api/bills - List all bills (optionally filtered by user)
 export async function GET() {
   try {
+    const session = await auth();
+    
+    // If logged in, show user's bills. Otherwise show all (for backwards compat)
+    const whereClause = session?.user?.id 
+      ? { userId: session.user.id }
+      : {};
+    
     const bills = await db.bill.findMany({
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
       include: {
         items: true,
@@ -29,6 +38,7 @@ export async function GET() {
 // POST /api/bills - Create a new bill
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth();
     const body = await request.json();
     const { name, items, taxAmount = 0, tipAmount = 0, subtotal, total } = body;
     
@@ -56,6 +66,8 @@ export async function POST(request: NextRequest) {
         tipAmount,
         subtotal: calculatedSubtotal,
         total: calculatedTotal,
+        // Link to user if logged in
+        userId: session?.user?.id || null,
         items: {
           create: items.map((item: { name: string; price: number; quantity?: number }) => ({
             name: item.name,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
@@ -43,7 +43,7 @@ interface SelectionGridProps {
   isLocked?: boolean;
 }
 
-export function SelectionGrid({
+export const SelectionGrid = memo(function SelectionGrid({
   items,
   shares,
   claims,
@@ -294,5 +294,5 @@ export function SelectionGrid({
       </div>
     </div>
   );
-}
+});
 
