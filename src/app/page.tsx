@@ -5,12 +5,29 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { FileUpload } from '@/components/FileUpload';
 import { ItemTable, BillItem } from '@/components/ItemTable';
+import { DevDebugPanel } from '@/components/DevDebugPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
+import { UserMenu } from '@/components/UserMenu';
 import { toast } from 'sonner';
 
 type Step = 'upload' | 'review' | 'success';
+
+interface ParseDebugData {
+  markdown?: string;
+  data?: {
+    items: Array<{ name: string; price: number; quantity: number }>;
+    subtotal: number;
+    tax: number;
+    total: number;
+  };
+  error?: string;
+  status?: number;
+  timing?: {
+    totalMs: number;
+  };
+}
 
 export default function Home() {
   const router = useRouter();
@@ -21,9 +38,11 @@ export default function Home() {
   const [taxAmount, setTaxAmount] = useState(0);
   const [tipAmount, setTipAmount] = useState(0);
   const [createdBillId, setCreatedBillId] = useState<string | null>(null);
+  const [debugData, setDebugData] = useState<ParseDebugData | null>(null);
 
   const handleFileSelect = async (file: File) => {
     setIsProcessing(true);
+    const startTime = Date.now();
     
     try {
       const formData = new FormData();
@@ -35,6 +54,16 @@ export default function Home() {
       });
       
       const result = await response.json();
+      const totalMs = Date.now() - startTime;
+      
+      // Always update debug data for dev panel
+      setDebugData({
+        markdown: result.markdown,
+        data: result.data,
+        error: result.error,
+        status: response.status,
+        timing: { totalMs },
+      });
       
       if (!response.ok) {
         throw new Error(result.error || 'Failed to parse document');
@@ -125,6 +154,9 @@ export default function Home() {
 
   return (
     <main className="min-h-screen">
+      {/* Developer Debug Panel - toggle with Ctrl+Shift+D */}
+      <DevDebugPanel debugData={debugData} />
+      
       {/* Header */}
       <header className="border-b border-zinc-800/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -134,14 +166,17 @@ export default function Home() {
             </div>
             <span className="text-xl font-semibold">FairShare</span>
           </Link>
-          <Link href="/dashboard">
-            <Button variant="ghost" size="sm">
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-              Dashboard
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard">
+              <Button variant="ghost" size="sm">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Dashboard
+              </Button>
+            </Link>
+            <UserMenu />
+          </div>
         </div>
       </header>
 

@@ -103,6 +103,9 @@ async function callOllama(markdown: string): Promise<BillData | null> {
   const model = process.env.OLLAMA_MODEL || 'llama3:8b';
   
   const prompt = EXTRACTION_PROMPT.replace('{MARKDOWN}', markdown);
+  const startTime = Date.now();
+  
+  console.log('[LLM] Calling Ollama:', { baseUrl, model, promptLength: prompt.length });
   
   try {
     const response = await fetch(`${baseUrl}/api/generate`, {
@@ -119,6 +122,8 @@ async function callOllama(markdown: string): Promise<BillData | null> {
         }
       }),
     });
+    
+    console.log('[LLM] Ollama responded:', { status: response.status, durationMs: Date.now() - startTime });
     
     if (!response.ok) {
       console.error('Ollama request failed:', response.status, await response.text());
@@ -146,7 +151,7 @@ async function callOllama(markdown: string): Promise<BillData | null> {
     return null;
     
   } catch (error) {
-    console.error('Ollama error:', error);
+    console.error('[LLM] Ollama ERROR:', error instanceof Error ? error.message : error, 'after', Date.now() - startTime, 'ms');
     return null;
   }
 }
