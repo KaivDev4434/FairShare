@@ -95,18 +95,18 @@ function parseJsonResponse(text: string): unknown {
   return JSON.parse(cleaned);
 }
 
-// Timeout for Ollama calls (60s to stay under Cloudflare's 100s limit)
-const OLLAMA_TIMEOUT_MS = 60000;
+// Timeout for Ollama calls (80s to stay under Cloudflare's 100s limit)
+const OLLAMA_TIMEOUT_MS = 80000;
 
 /**
  * Call Ollama API with timeout
  */
 async function callOllama(markdown: string): Promise<BillData | null> {
   const baseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-  const model = process.env.OLLAMA_MODEL || 'llama3:8b';
+  const model = process.env.OLLAMA_MODEL || 'qwen2:1.5b';
   
-  // Truncate markdown if too long (Ollama struggles with very long prompts)
-  const maxMarkdownLength = 8000;
+  // Truncate markdown if too long (keep reasonable for faster processing)
+  const maxMarkdownLength = 12000;
   const truncatedMarkdown = markdown.length > maxMarkdownLength 
     ? markdown.slice(0, maxMarkdownLength) + '\n\n[Content truncated...]'
     : markdown;
