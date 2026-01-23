@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { FileUpload } from '@/components/FileUpload';
 import { ItemTable, BillItem } from '@/components/ItemTable';
 import { DevDebugPanel } from '@/components/DevDebugPanel';
+import { LandingPage } from '@/components/LandingPage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -31,6 +33,7 @@ interface ParseDebugData {
 
 export default function Home() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [step, setStep] = useState<Step>('upload');
   const [isProcessing, setIsProcessing] = useState(false);
   const [billName, setBillName] = useState('');
@@ -39,6 +42,14 @@ export default function Home() {
   const [tipAmount, setTipAmount] = useState(0);
   const [createdBillId, setCreatedBillId] = useState<string | null>(null);
   const [debugData, setDebugData] = useState<ParseDebugData | null>(null);
+  const [isGuest, setIsGuest] = useState(false);
+
+  // Show landing page if not authenticated and not a guest
+  const showLandingPage = status !== 'loading' && !session && !isGuest;
+
+  const handleGuestContinue = () => {
+    setIsGuest(true);
+  };
 
   const handleFileSelect = async (file: File) => {
     setIsProcessing(true);
@@ -152,6 +163,20 @@ export default function Home() {
     toast.success('Link copied to clipboard!');
   };
 
+  // Show loading state
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Show landing page for unauthenticated users
+  if (showLandingPage) {
+    return <LandingPage onGuestContinue={handleGuestContinue} />;
+  }
+
   return (
     <main className="min-h-screen">
       {/* Developer Debug Panel - toggle with Ctrl+Shift+D */}
@@ -160,8 +185,8 @@ export default function Home() {
       {/* Header */}
       <header className="border-b border-zinc-800/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+          <Link href="/" className="flex items-center gap-2 group">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 group-hover:shadow-emerald-500/30 transition-shadow">
               <span className="text-lg font-bold">F</span>
             </div>
             <span className="text-xl font-semibold">FairShare</span>
