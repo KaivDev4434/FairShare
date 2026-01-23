@@ -92,7 +92,9 @@ CREATE TABLE IF NOT EXISTS Share (
     id TEXT NOT NULL PRIMARY KEY,
     name TEXT NOT NULL,
     billId TEXT NOT NULL,
-    FOREIGN KEY (billId) REFERENCES Bill (id) ON DELETE CASCADE
+    userId TEXT,
+    FOREIGN KEY (billId) REFERENCES Bill (id) ON DELETE CASCADE,
+    FOREIGN KEY (userId) REFERENCES User (id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS Claim (
@@ -125,6 +127,14 @@ for (const idx of indexes) {
 try {
   db.exec("ALTER TABLE Bill ADD COLUMN userId TEXT REFERENCES User(id) ON DELETE SET NULL");
   console.log("Added userId column to Bill table");
+} catch (e) {
+  // Column already exists
+}
+
+// Add userId column to Share if it doesn't exist (migration for existing data)
+try {
+  db.exec("ALTER TABLE Share ADD COLUMN userId TEXT REFERENCES User(id) ON DELETE SET NULL");
+  console.log("Added userId column to Share table");
 } catch (e) {
   // Column already exists
 }
