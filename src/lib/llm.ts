@@ -95,17 +95,30 @@ function parseJsonResponse(text: string): unknown {
   return JSON.parse(cleaned);
 }
 
+// Timeout for Ollama calls (60s to stay under Cloudflare's 100s limit)
+const OLLAMA_TIMEOUT_MS = 60000;
+
 /**
- * Call Ollama API
+ * Call Ollama API with timeout
  */
 async function callOllama(markdown: string): Promise<BillData | null> {
   const baseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
   const model = process.env.OLLAMA_MODEL || 'llama3:8b';
   
-  const prompt = EXTRACTION_PROMPT.replace('{MARKDOWN}', markdown);
+  // Truncate markdown if too long (Ollama struggles with very long prompts)
+  const maxMarkdownLength = 8000;
+  const truncatedMarkdown = markdown.length > maxMarkdownLength 
+    ? markdown.slice(0, maxMarkdownLength) + '\n\n[Content truncated...]'
+    : markdown;
+  
+  const prompt = EXTRACTION_PROMPT.replace('{MARKDOWN}', truncatedMarkdown);
   const startTime = Date.now();
   
-  console.log('[LLM] Calling Ollama:', { baseUrl, model, promptLength: prompt.length });
+  console.log('[LLM] Calling Ollama:', { baseUrl, model, promptLength: prompt.length, truncated: markdown.length > maxMarkdownLength });
+  
+  // Create abort controller for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
   
   try {
     const response = await fetch(`${baseUrl}/api/generate`, {
@@ -118,11 +131,13 @@ async function callOllama(markdown: string): Promise<BillData | null> {
         format: 'json',
         options: {
           temperature: 0,  // Deterministic output
-          num_predict: 4096,
+          num_predict: 2048, // Reduced for faster response
         }
       }),
+      signal: controller.signal,
     });
     
+    clearTimeout(timeoutId);
     console.log('[LLM] Ollama responded:', { status: response.status, durationMs: Date.now() - startTime });
     
     if (!response.ok) {
@@ -151,7 +166,12 @@ async function callOllama(markdown: string): Promise<BillData | null> {
     return null;
     
   } catch (error) {
-    console.error('[LLM] Ollama ERROR:', error instanceof Error ? error.message : error, 'after', Date.now() - startTime, 'ms');
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('[LLM] Ollama TIMEOUT after', OLLAMA_TIMEOUT_MS, 'ms');
+    } else {
+      console.error('[LLM] Ollama ERROR:', error instanceof Error ? error.message : error, 'after', Date.now() - startTime, 'ms');
+    }
     return null;
   }
 }
@@ -261,38 +281,92 @@ export async function extractBillData(markdown: string): Promise<BillData> {
 
 /**
  * Simple extraction without LLM (for testing/fallback)
- * Tries to parse basic line-item patterns
+ * Tries to parse basic line-item patterns from receipts
  */
 export function extractBillDataSimple(markdown: string): BillData {
   const items: BillItem[] = [];
   const lines = markdown.split('\n');
   
-  // Common patterns for price extraction
-  const pricePattern = /\$?\s*(\d+\.?\d*)/;
+  // Skip words that are likely not items
+  const skipPatterns = /^(subtotal|total|tax|shipping|delivery|tip|fee|discount|savings|order|payment|card|visa|mastercard|amex|debit|credit|change|balance|thank|receipt|store|date|time|sold|qty|price|description|item\s*#|sku)/i;
+  
+  // Patterns for extracting items with prices
+  const patterns = [
+    // Pattern 1: "Item Name $12.34" or "Item Name 12.34"
+    /^(.+?)\s+\$?\s*(\d+\.\d{2})\s*$/,
+    // Pattern 2: "$12.34 Item Name" (price first)
+    /^\$?\s*(\d+\.\d{2})\s+(.+)$/,
+    // Pattern 3: Table format with | separator: "| Item | $12.34 |"
+    /\|\s*(.+?)\s*\|\s*\$?\s*(\d+\.\d{2})\s*\|/,
+    // Pattern 4: "2x Item Name $12.34" (quantity prefix)
+    /^(\d+)\s*x\s+(.+?)\s+\$?\s*(\d+\.\d{2})\s*$/,
+  ];
+  
+  let tax = 0;
+  let total = 0;
   
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed) continue;
+    if (!trimmed || trimmed.length < 3) continue;
     
-    // Look for lines with prices
-    const match = trimmed.match(/(.+?)\s+\$?\s*(\d+\.?\d{0,2})\s*$/);
-    if (match) {
-      const name = match[1].trim();
-      const price = parseFloat(match[2]);
+    // Skip header/footer lines
+    if (skipPatterns.test(trimmed)) {
+      // But try to extract tax and total
+      const taxMatch = trimmed.match(/tax[:\s]+\$?\s*(\d+\.\d{2})/i);
+      if (taxMatch) tax = parseFloat(taxMatch[1]);
       
-      if (name && !isNaN(price) && price > 0) {
-        items.push({ name, price, quantity: 1 });
+      const totalMatch = trimmed.match(/total[:\s]+\$?\s*(\d+\.\d{2})/i);
+      if (totalMatch) total = parseFloat(totalMatch[1]);
+      
+      continue;
+    }
+    
+    // Try each pattern
+    for (const pattern of patterns) {
+      const match = trimmed.match(pattern);
+      if (match) {
+        let name: string;
+        let price: number;
+        let quantity = 1;
+        
+        if (pattern === patterns[3]) {
+          // Quantity pattern
+          quantity = parseInt(match[1]);
+          name = match[2].trim();
+          price = parseFloat(match[3]);
+        } else if (pattern === patterns[1]) {
+          // Price first pattern
+          price = parseFloat(match[1]);
+          name = match[2].trim();
+        } else {
+          // Standard patterns
+          name = match[1].trim();
+          price = parseFloat(match[2]);
+        }
+        
+        // Validate
+        if (name && name.length > 1 && !isNaN(price) && price > 0 && price < 10000) {
+          // Clean up name
+          name = name.replace(/^\||\|$/g, '').trim();
+          if (name.length > 2 && !skipPatterns.test(name)) {
+            items.push({ name, price, quantity });
+          }
+        }
+        break;
       }
     }
   }
   
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const finalTotal = total > 0 ? total : subtotal + tax;
+  
+  console.log('[LLM] Simple extraction found', items.length, 'items, subtotal:', subtotal, 'tax:', tax, 'total:', finalTotal);
   
   return {
     items,
     subtotal: Math.round(subtotal * 100) / 100,
-    tax: 0,
-    total: Math.round(subtotal * 100) / 100,
+    tax: Math.round(tax * 100) / 100,
+    total: Math.round(finalTotal * 100) / 100,
   };
 }
 
