@@ -64,8 +64,8 @@ export async function PATCH(
     const session = await auth();
     
     // Check ownership if bill has an owner
-    const bill = await db.bill.findUnique({ where: { id }, select: { userId: true } });
-    if (bill?.userId && !await checkOwnership(id, session?.user?.id)) {
+    const existingBill = await db.bill.findUnique({ where: { id }, select: { userId: true } });
+    if (existingBill?.userId && !await checkOwnership(id, session?.user?.id)) {
       return NextResponse.json(
         { error: 'You do not have permission to edit this bill' },
         { status: 403 }
@@ -138,8 +138,8 @@ export async function DELETE(
     const session = await auth();
     
     // Check ownership if bill has an owner
-    const bill = await db.bill.findUnique({ where: { id }, select: { userId: true } });
-    if (bill?.userId && !await checkOwnership(id, session?.user?.id)) {
+    const existingBill = await db.bill.findUnique({ where: { id }, select: { userId: true } });
+    if (existingBill?.userId && !await checkOwnership(id, session?.user?.id)) {
       return NextResponse.json(
         { error: 'You do not have permission to delete this bill' },
         { status: 403 }
