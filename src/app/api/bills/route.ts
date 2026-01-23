@@ -2,15 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 
-// GET /api/bills - List all bills (optionally filtered by user)
+// GET /api/bills - List all bills (filtered by ownership or participation)
 export async function GET() {
   try {
     const session = await auth();
     
-    // If logged in, show user's bills. Otherwise show all (for backwards compat)
-    const whereClause = session?.user?.id 
-      ? { userId: session.user.id }
-      : {};
+    // Build where clause based on authentication
+    let whereClause = {};
+    
+    if (session?.user?.id) {
+      // Logged in: show bills where user is owner OR participant
+      whereClause = {
+        OR: [
+          { userId: session.user.id },                              // Bills I own
+          { shares: { some: { userId: session.user.id } } },        // Bills I participate in
+          { userId: null },                                          // Old bills (no owner) - accessible to all
+        ],
+      };
+    }
+    // If not logged in: show all bills (for backwards compat / guest mode)
     
     const bills = await db.bill.findMany({
       where: whereClause,

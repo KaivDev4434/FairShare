@@ -20,6 +20,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   bills         Bill[]    // Bills created by this user
+  shares        Share[]   // Bills this user participates in
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -93,6 +94,10 @@ model Share {
   billId   String
   bill     Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
   claims   Claim[]
+  
+  // Link to user account (optional for backwards compatibility)
+  userId   String?
+  user     User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
 model Claim {

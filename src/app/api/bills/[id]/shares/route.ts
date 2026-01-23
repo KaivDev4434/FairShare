@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { auth } from '@/lib/auth';
 
 // GET /api/bills/[id]/shares - Get all shares for a bill
 export async function GET(
@@ -37,6 +38,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
+    const session = await auth();
     const body = await request.json();
     const { name } = body;
     
@@ -78,10 +80,12 @@ export async function POST(
       );
     }
     
+    // Link to user if logged in (for access management)
     const share = await db.share.create({
       data: {
         name: name.trim(),
         billId: id,
+        userId: session?.user?.id || null,
       },
       include: {
         claims: true,
