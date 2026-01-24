@@ -182,10 +182,9 @@ docker logs fairshare-tunnel 2>&1 | grep trycloudflare
 - [ ] **Performance Optimization** — Reduce lag and improve responsiveness
 
 ### v2.0 — Planned Features 🚧
-- [ ] **User Authentication** — Sign in with email/OAuth
+- [x] **User Authentication** — Sign in with Google/GitHub OAuth
 - [ ] **User Profiles** — Track your personal spending history
-- [ ] **Groups** — Create groups (e.g., "Roommates", "Trip Friends")
-- [ ] **Group Analytics** — See spending patterns within groups
+- [ ] **Access Management** — See only bills you own or participate in
 - [ ] **Personal Analytics** — Track your expenses over time
 
 ### v3.0 — Future Ideas 💡
