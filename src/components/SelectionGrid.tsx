@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, memo, useRef, useEffect } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
@@ -53,15 +53,6 @@ export const SelectionGrid = memo(function SelectionGrid({
   onRemoveShare,
   isLocked = false,
 }: SelectionGridProps) {
-  const renderCountRef = useRef(0);
-  renderCountRef.current++;
-  
-  // #region agent log
-  useEffect(() => {
-    fetch('http://127.0.0.1:7243/ingest/8731b95e-c228-4332-b8f9-bef6b33f8baf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SelectionGrid.tsx:render',message:'SelectionGrid rendered',data:{renderCount:renderCountRef.current,claimsCount:claims.length,itemsCount:items.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
-  });
-  // #endregion
-  
   const [newPersonName, setNewPersonName] = useState('');
   const [showPortionDialog, setShowPortionDialog] = useState<{ itemId: string; shareId: string } | null>(null);
 
@@ -83,9 +74,6 @@ export const SelectionGrid = memo(function SelectionGrid({
   };
 
   const handleCheckboxChange = (shareId: string, itemId: string, checked: boolean) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/8731b95e-c228-4332-b8f9-bef6b33f8baf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SelectionGrid.tsx:handleCheckboxChange',message:'Checkbox change triggered',data:{shareId,itemId,checked},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,E'})}).catch(()=>{});
-    // #endregion
     onClaimChange(shareId, itemId, checked ? 1 : 0);
   };
 
@@ -177,12 +165,6 @@ export const SelectionGrid = memo(function SelectionGrid({
           const currentClaim = currentShareId ? getClaim(currentShareId, item.id) : undefined;
           // Explicitly check if THIS user has selected this item (not other users)
           const isSelected = isItemSelectedByCurrentUser(item.id);
-          
-          // #region agent log
-          if (item.name === items[0]?.name) { // Only log first item to reduce noise
-            fetch('http://127.0.0.1:7243/ingest/8731b95e-c228-4332-b8f9-bef6b33f8baf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SelectionGrid.tsx:itemRender',message:'Item render state',data:{itemName:item.name,isSelected,currentClaimPortion:currentClaim?.portion,claimantsCount:claimants.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,D'})}).catch(()=>{});
-          }
-          // #endregion
 
           return (
             <div
