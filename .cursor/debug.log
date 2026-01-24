@@ -1,3 +1,0 @@
-{"location":"parse/route.ts:POST_ENTRY","message":"Parse API called","data":{"timestamp":1769124089623},"timestamp":1769124089623,"sessionId":"debug-session","hypothesisId":"A,B,C,D,E"}
-{"location":"parse/route.ts:BEFORE_DOCLING","message":"About to call Docling service","data":{"fileName":"Order details - Walmart.com (1).pdf","fileSize":323395,"fileType":"application/pdf","doclingUrl":"http://localhost:8000"},"timestamp":1769124089626,"sessionId":"debug-session","hypothesisId":"A,B"}
-{"location":"parse/route.ts:DOCLING_ERROR","message":"Docling service error","data":{"error":"fetch failed","durationMs":3},"timestamp":1769124089629,"sessionId":"debug-session","hypothesisId":"A,B,E"}

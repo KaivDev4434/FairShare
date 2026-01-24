@@ -135,7 +135,11 @@ export default function BillPage() {
       }
     });
     
-    return Array.from(claimsMap.values());
+    const result = Array.from(claimsMap.values());
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/8731b95e-c228-4332-b8f9-bef6b33f8baf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:allClaims:memo',message:'allClaims recomputed',data:{serverClaimsCount:serverClaims.length,optimisticClaimsCount:optimisticClaims.size,resultCount:result.length,optimisticKeys:Array.from(optimisticClaims.keys())},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,B'})}).catch(()=>{});
+    // #endregion
+    return result;
   }, [bill?.shares, optimisticClaims]);
 
   const fetchBill = useCallback(async () => {
@@ -233,8 +237,15 @@ export default function BillPage() {
   const handleClaimChange = async (shareId: string, itemId: string, portion: number) => {
     const key = `${shareId}-${itemId}`;
     
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/8731b95e-c228-4332-b8f9-bef6b33f8baf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:handleClaimChange:entry',message:'handleClaimChange called',data:{shareId,itemId,portion,key,pendingHasKey:pendingClaimsRef.current.has(key),pendingKeys:Array.from(pendingClaimsRef.current)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,C'})}).catch(()=>{});
+    // #endregion
+    
     // Skip if already processing this exact claim
     if (pendingClaimsRef.current.has(key)) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/8731b95e-c228-4332-b8f9-bef6b33f8baf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:handleClaimChange:skipped',message:'Skipped due to pending',data:{key},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
       return;
     }
     
@@ -263,15 +274,25 @@ export default function BillPage() {
         });
       }
       
-      // Clear this optimistic update after server confirms
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/8731b95e-c228-4332-b8f9-bef6b33f8baf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:handleClaimChange:beforeFetchBill',message:'About to fetchBill',data:{key},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      
+      // Fetch updated data FIRST, then clear optimistic update
+      // This prevents flicker where neither optimistic nor server state has the claim
+      await fetchBill();
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/8731b95e-c228-4332-b8f9-bef6b33f8baf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:handleClaimChange:afterFetchBill',message:'fetchBill completed, now clearing optimistic',data:{key},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      
+      // Clear optimistic update AFTER server state is loaded
       setOptimisticClaims(prev => {
         const next = new Map(prev);
         next.delete(key);
         return next;
       });
       
-      // Fetch updated data (debounced to batch rapid changes)
-      await fetchBill();
       debouncedFetchSplits();
     } catch (error) {
       // Revert optimistic update on error
@@ -282,6 +303,9 @@ export default function BillPage() {
       });
       toast.error('Failed to update selection');
     } finally {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/8731b95e-c228-4332-b8f9-bef6b33f8baf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:handleClaimChange:finally',message:'Removing key from pending',data:{key,pendingKeysBefore:Array.from(pendingClaimsRef.current)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
       pendingClaimsRef.current.delete(key);
     }
   };
