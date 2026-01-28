@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { calculateSplits, PersonTotal } from '@/lib/calculations';
+import { calculateSplits, calculateBillBalances, suggestSettlements, PersonTotal, Payment } from '@/lib/calculations';
 
 // GET /api/bills/[id]/calculate - Calculate splits for a bill
 export async function GET(
@@ -60,14 +60,33 @@ export async function GET(
     const totalClaimed = splits.reduce((sum, p) => sum + p.grandTotal, 0);
     const unclaimed = bill.total - totalClaimed;
     
+    // Get payment information from shares
+    const payments: Payment[] = bill.shares
+      .filter((s: { amountPaid: number }) => s.amountPaid > 0)
+      .map((s: { name: string; amountPaid: number }) => ({
+        name: s.name,
+        amount: s.amountPaid,
+      }));
+    
+    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+    
+    // Calculate balances and settlements
+    const balances = calculateBillBalances(splits, payments);
+    const settlements = suggestSettlements(balances);
+    
     return NextResponse.json({
       billId: bill.id,
       billName: bill.name,
       billTotal: bill.total,
       splits,
+      payments,
+      balances,
+      settlements,
       summary: {
         totalClaimed: Math.round(totalClaimed * 100) / 100,
         unclaimed: Math.round(unclaimed * 100) / 100,
+        totalPaid: Math.round(totalPaid * 100) / 100,
+        remainingToPay: Math.round((bill.total - totalPaid) * 100) / 100,
         itemCount: bill.items.length,
         personCount: bill.shares.length,
       },

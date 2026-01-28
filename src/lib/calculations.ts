@@ -212,28 +212,78 @@ export interface Settlement {
   amount: number;
 }
 
+export interface Payment {
+  name: string;
+  amount: number;
+}
+
+/**
+ * Calculate balances for a single bill with multiple payers
+ * Returns balances showing who owes whom
+ */
+export function calculateBillBalances(
+  personTotals: PersonTotal[],
+  payments: Payment[]
+): Balance[] {
+  const balances: Record<string, number> = {};
+  
+  // Each person owes their share (negative balance)
+  for (const person of personTotals) {
+    if (!balances[person.name]) {
+      balances[person.name] = 0;
+    }
+    balances[person.name] -= person.grandTotal;
+  }
+  
+  // Each payer is owed what they paid (positive balance)
+  for (const payment of payments) {
+    if (!balances[payment.name]) {
+      balances[payment.name] = 0;
+    }
+    balances[payment.name] += payment.amount;
+  }
+  
+  return Object.entries(balances).map(([name, amount]) => ({
+    personName: name,
+    amount: Math.round(amount * 100) / 100,
+  }));
+}
+
+/**
+ * Calculate running balances between roommates across multiple bills
+ * Supports both legacy single-payer format and new multi-payer format
+ */
 export function calculateBalances(
-  bills: { personTotals: PersonTotal[]; paidBy: string }[]
+  bills: { personTotals: PersonTotal[]; paidBy?: string; payments?: Payment[] }[]
 ): Balance[] {
   const balances: Record<string, number> = {};
   
   for (const bill of bills) {
-    const totalBill = bill.personTotals.reduce((sum, p) => sum + p.grandTotal, 0);
-    
+    // Each person owes their share
     for (const person of bill.personTotals) {
       if (!balances[person.name]) {
         balances[person.name] = 0;
       }
-      
-      // Each person owes their share
       balances[person.name] -= person.grandTotal;
     }
     
-    // The person who paid is owed the total
-    if (!balances[bill.paidBy]) {
-      balances[bill.paidBy] = 0;
+    // Handle payments - support both legacy (paidBy) and new (payments array) format
+    if (bill.payments && bill.payments.length > 0) {
+      // New format: multiple payers with specific amounts
+      for (const payment of bill.payments) {
+        if (!balances[payment.name]) {
+          balances[payment.name] = 0;
+        }
+        balances[payment.name] += payment.amount;
+      }
+    } else if (bill.paidBy) {
+      // Legacy format: single payer paid the full amount
+      const totalBill = bill.personTotals.reduce((sum, p) => sum + p.grandTotal, 0);
+      if (!balances[bill.paidBy]) {
+        balances[bill.paidBy] = 0;
+      }
+      balances[bill.paidBy] += totalBill;
     }
-    balances[bill.paidBy] += totalBill;
   }
   
   return Object.entries(balances).map(([name, amount]) => ({

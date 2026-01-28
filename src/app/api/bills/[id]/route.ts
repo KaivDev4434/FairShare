@@ -9,13 +9,16 @@ async function checkOwnership(billId: string, userId: string | undefined): Promi
   return bill?.userId === userId;
 }
 
-// GET /api/bills/[id] - Get a single bill with all details (public for sharing)
+// GET /api/bills/[id] - Get a single bill with all details
+// Bills are accessible to anyone with the link (shared link acts as invitation)
+// Dashboard filtering handles showing only relevant bills to users
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+    const session = await auth();
     
     const bill = await db.bill.findUnique({
       where: { id },
@@ -34,6 +37,9 @@ export async function GET(
             claims: true,
           },
         },
+        user: {
+          select: { id: true, name: true, email: true },
+        },
       },
     });
     
@@ -44,7 +50,10 @@ export async function GET(
       );
     }
     
-    return NextResponse.json(bill);
+    // Add isCreator flag to response for frontend to use
+    const isCreator = bill.userId === session?.user?.id;
+    
+    return NextResponse.json({ ...bill, isCreator });
   } catch (error) {
     console.error('Error fetching bill:', error);
     return NextResponse.json(
@@ -75,21 +84,45 @@ export async function PATCH(
     const body = await request.json();
     const { name, taxAmount, tipAmount, locked, items } = body;
     
+    // Validate name if provided
+    if (name !== undefined && (typeof name !== 'string' || !name.trim())) {
+      return NextResponse.json(
+        { error: 'Bill name cannot be empty' },
+        { status: 400 }
+      );
+    }
+    
     // Build update data
     const updateData: Record<string, unknown> = {};
-    if (name !== undefined) updateData.name = name;
+    if (name !== undefined) updateData.name = name.trim();
     if (taxAmount !== undefined) updateData.taxAmount = taxAmount;
     if (tipAmount !== undefined) updateData.tipAmount = tipAmount;
     if (locked !== undefined) updateData.locked = locked;
     
     // If items are provided, update them
     if (items && Array.isArray(items)) {
+      // Validate all items
+      for (const item of items) {
+        if (!item.name || typeof item.name !== 'string' || !item.name.trim()) {
+          return NextResponse.json(
+            { error: 'All items must have a name' },
+            { status: 400 }
+          );
+        }
+        if (typeof item.price !== 'number' || item.price < 0) {
+          return NextResponse.json(
+            { error: 'All items must have a valid price (0 or more)' },
+            { status: 400 }
+          );
+        }
+      }
+      
       // Delete existing items and recreate
       await db.item.deleteMany({ where: { billId: id } });
       
       updateData.items = {
         create: items.map((item: { name: string; price: number; quantity?: number }) => ({
-          name: item.name,
+          name: item.name.trim(),
           price: item.price,
           quantity: item.quantity || 1,
         })),

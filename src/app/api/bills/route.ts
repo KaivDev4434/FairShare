@@ -52,11 +52,40 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { name, items, taxAmount = 0, tipAmount = 0, subtotal, total } = body;
     
-    if (!name || !items || !Array.isArray(items)) {
+    if (!name || typeof name !== 'string' || !name.trim()) {
       return NextResponse.json(
-        { error: 'Missing required fields: name and items' },
+        { error: 'Bill name is required' },
         { status: 400 }
       );
+    }
+    
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return NextResponse.json(
+        { error: 'At least one item is required' },
+        { status: 400 }
+      );
+    }
+    
+    // Validate all items
+    for (const item of items) {
+      if (!item.name || typeof item.name !== 'string' || !item.name.trim()) {
+        return NextResponse.json(
+          { error: 'All items must have a name' },
+          { status: 400 }
+        );
+      }
+      if (typeof item.price !== 'number' || item.price < 0) {
+        return NextResponse.json(
+          { error: 'All items must have a valid price (0 or more)' },
+          { status: 400 }
+        );
+      }
+      if (item.quantity !== undefined && (typeof item.quantity !== 'number' || item.quantity < 1)) {
+        return NextResponse.json(
+          { error: 'Item quantities must be at least 1' },
+          { status: 400 }
+        );
+      }
     }
     
     // Calculate subtotal if not provided

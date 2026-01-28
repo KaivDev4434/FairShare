@@ -3,14 +3,14 @@
 import { useState, useCallback, memo } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Slider } from '@/components/ui/slider';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
   DialogTrigger,
 } from '@/components/ui/dialog';
 
@@ -40,7 +40,10 @@ interface SelectionGridProps {
   onClaimChange: (shareId: string, itemId: string, portion: number) => void;
   onAddShare: (name: string) => void;
   onRemoveShare: (shareId: string) => void;
+  onRemoveItem?: (itemId: string) => void;  // Optional: for removing items
   isLocked?: boolean;
+  requiresAuth?: boolean;  // Whether this is a new auth-required bill
+  isCreator?: boolean;     // Whether current user is the bill creator
 }
 
 export const SelectionGrid = memo(function SelectionGrid({
@@ -51,10 +54,13 @@ export const SelectionGrid = memo(function SelectionGrid({
   onClaimChange,
   onAddShare,
   onRemoveShare,
+  onRemoveItem,
   isLocked = false,
+  requiresAuth = false,
+  isCreator = false,
 }: SelectionGridProps) {
-  const [newPersonName, setNewPersonName] = useState('');
   const [showPortionDialog, setShowPortionDialog] = useState<{ itemId: string; shareId: string } | null>(null);
+  const [showDeleteItemDialog, setShowDeleteItemDialog] = useState<{ id: string; name: string } | null>(null);
 
   const getClaim = useCallback((shareId: string, itemId: string): Claim | undefined => {
     return claims.find(c => c.shareId === shareId && c.itemId === itemId);
@@ -65,13 +71,9 @@ export const SelectionGrid = memo(function SelectionGrid({
       .filter(c => c.itemId === itemId && c.portion > 0)
       .map(c => shares.find(s => s.id === c.shareId)?.name || 'Unknown');
   }, [claims, shares]);
-
-  const handleAddPerson = () => {
-    if (newPersonName.trim()) {
-      onAddShare(newPersonName.trim());
-      setNewPersonName('');
-    }
-  };
+  
+  // Check if creator can modify items (for auth bills only creator, for legacy anyone)
+  const canModifyItems = !isLocked && (!requiresAuth || isCreator);
 
   const handleCheckboxChange = (shareId: string, itemId: string, checked: boolean) => {
     onClaimChange(shareId, itemId, checked ? 1 : 0);
@@ -97,67 +99,7 @@ export const SelectionGrid = memo(function SelectionGrid({
   }, [currentShareId, getClaim]);
 
   return (
-    <div className="space-y-6">
-      {/* People Pills */}
-      <div className="flex flex-wrap gap-2 items-center">
-        {shares.map((share) => (
-          <Badge
-            key={share.id}
-            variant={currentShareId === share.id ? 'default' : 'outline'}
-            className={`
-              text-sm py-1.5 px-3 cursor-pointer transition-all
-              ${currentShareId === share.id 
-                ? 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600' 
-                : 'border-zinc-700 hover:border-zinc-500'
-              }
-            `}
-          >
-            {share.name}
-            {!isLocked && shares.length > 1 && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemoveShare(share.id);
-                }}
-                className="ml-2 hover:text-red-400"
-              >
-                ×
-              </button>
-            )}
-          </Badge>
-        ))}
-        
-        {!isLocked && (
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="border-dashed border-zinc-700">
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add Person
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="bg-zinc-900 border-zinc-800">
-              <DialogHeader>
-                <DialogTitle>Add a Person</DialogTitle>
-              </DialogHeader>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Enter name..."
-                  value={newPersonName}
-                  onChange={(e) => setNewPersonName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddPerson()}
-                  className="bg-zinc-800 border-zinc-700"
-                />
-                <Button onClick={handleAddPerson} className="bg-emerald-600 hover:bg-emerald-700">
-                  Add
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        )}
-      </div>
-
+    <div className="space-y-4">
       {/* Items Selection */}
       <div className="space-y-2">
         {items.map((item) => {
@@ -286,12 +228,59 @@ export const SelectionGrid = memo(function SelectionGrid({
                   <span className="font-semibold text-emerald-400">
                     {formatCurrency(item.price * item.quantity)}
                   </span>
+                  
+                  {/* Delete button for creator */}
+                  {canModifyItems && onRemoveItem && (
+                    <button
+                      onClick={() => setShowDeleteItemDialog({ id: item.id, name: item.name })}
+                      className="ml-2 p-1.5 rounded-md text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                      title="Remove item"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           );
         })}
       </div>
+      
+      {/* Delete Item Confirmation Dialog */}
+      <Dialog open={!!showDeleteItemDialog} onOpenChange={(open) => !open && setShowDeleteItemDialog(null)}>
+        <DialogContent className="bg-zinc-900 border-zinc-800">
+          <DialogHeader>
+            <DialogTitle>Remove Item</DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Are you sure you want to remove &quot;{showDeleteItemDialog?.name}&quot; from the bill? 
+              This will also remove all claims for this item.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteItemDialog(null)}
+              className="border-zinc-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (showDeleteItemDialog && onRemoveItem) {
+                  onRemoveItem(showDeleteItemDialog.id);
+                  setShowDeleteItemDialog(null);
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Remove Item
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 });

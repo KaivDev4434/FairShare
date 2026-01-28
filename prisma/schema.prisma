@@ -61,17 +61,18 @@ model VerificationToken {
 
 // FairShare Models
 model Bill {
-  id        String   @id @default(cuid())
-  name      String   // "Costco Run - Nov 30"
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  locked    Boolean  @default(false) // Admin can lock when done
-  items     Item[]
-  shares    Share[]
-  taxAmount Float    @default(0)
-  tipAmount Float    @default(0)
-  subtotal  Float    @default(0)
-  total     Float    @default(0)
+  id           String   @id @default(cuid())
+  name         String   // "Costco Run - Nov 30"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  locked       Boolean  @default(false) // Admin can lock when done
+  requiresAuth Boolean  @default(true)  // false for legacy bills, true for new bills
+  items        Item[]
+  shares       Share[]
+  taxAmount    Float    @default(0)
+  tipAmount    Float    @default(0)
+  subtotal     Float    @default(0)
+  total        Float    @default(0)
   
   // Owner of the bill (optional for backwards compatibility)
   userId    String?
@@ -89,11 +90,12 @@ model Item {
 }
 
 model Share {
-  id       String  @id @default(cuid())
-  name     String  // Roommate name
-  billId   String
-  bill     Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
-  claims   Claim[]
+  id         String  @id @default(cuid())
+  name       String  // Roommate name
+  billId     String
+  bill       Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
+  claims     Claim[]
+  amountPaid Float   @default(0) // How much this person contributed to paying the bill
   
   // Link to user account (optional for backwards compatibility)
   userId   String?

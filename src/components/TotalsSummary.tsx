@@ -21,13 +21,20 @@ interface PersonTotal {
   }[];
 }
 
+interface Settlement {
+  from: string;
+  to: string;
+  amount: number;
+}
+
 interface TotalsSummaryProps {
   splits: PersonTotal[];
   billTotal: number;
   highlightShareId?: string | null;
+  settlements?: Settlement[];
 }
 
-export const TotalsSummary = memo(function TotalsSummary({ splits, billTotal, highlightShareId }: TotalsSummaryProps) {
+export const TotalsSummary = memo(function TotalsSummary({ splits, billTotal, highlightShareId, settlements }: TotalsSummaryProps) {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -156,6 +163,46 @@ export const TotalsSummary = memo(function TotalsSummary({ splits, billTotal, hi
             </span>
           </div>
         </div>
+      )}
+
+      {/* Settlements - Who owes whom */}
+      {settlements && settlements.length > 0 && (
+        <Card className="p-4 bg-zinc-900/50 border-zinc-800">
+          <h3 className="font-semibold mb-3 flex items-center gap-2">
+            <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            Settlements
+          </h3>
+          <div className="space-y-2">
+            {settlements.map((settlement, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between p-3 rounded-lg bg-zinc-800/50"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center text-sm font-bold">
+                    {settlement.from.charAt(0).toUpperCase()}
+                  </div>
+                  <svg className="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                  </svg>
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm font-bold">
+                    {settlement.to.charAt(0).toUpperCase()}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-zinc-400">
+                    {settlement.from} owes {settlement.to}
+                  </p>
+                  <p className="font-bold text-emerald-400">
+                    {formatCurrency(settlement.amount)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
       )}
     </div>
   );

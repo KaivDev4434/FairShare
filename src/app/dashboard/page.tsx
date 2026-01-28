@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -14,7 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { UserMenu } from '@/components/UserMenu';
 import { toast } from 'sonner';
-import { calculateBalances, suggestSettlements, formatCurrency } from '@/lib/calculations';
+import { calculateBalances, suggestSettlements, formatCurrency, Payment } from '@/lib/calculations';
 
 interface Item {
   id: string;
@@ -27,6 +28,8 @@ interface Share {
   id: string;
   name: string;
   claims: { itemId: string; portion: number }[];
+  amountPaid: number;
+  userId?: string | null;
 }
 
 interface Bill {
@@ -34,14 +37,17 @@ interface Bill {
   name: string;
   createdAt: string;
   locked: boolean;
+  requiresAuth: boolean;
   items: Item[];
   shares: Share[];
   taxAmount: number;
   tipAmount: number;
   total: number;
+  userId?: string | null;
 }
 
 export default function DashboardPage() {
+  const { data: session } = useSession();
   const [bills, setBills] = useState<Bill[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -49,6 +55,12 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchBills();
   }, []);
+
+  // Check if user is the creator of a bill
+  const isCreator = (bill: Bill) => bill.userId === session?.user?.id;
+  
+  // Check if user is a participant in a bill
+  const isParticipant = (bill: Bill) => bill.shares.some(s => s.userId === session?.user?.id);
 
   const fetchBills = async () => {
     try {
@@ -81,8 +93,7 @@ export default function DashboardPage() {
   // Calculate overall balances across all bills
   const allPersonNames = [...new Set(bills.flatMap(b => b.shares.map(s => s.name)))];
   
-  // For now, assume the first person on each bill is the payer
-  // In a real app, you'd track this explicitly
+  // Calculate totals per person per bill, using payments array
   const billsWithTotals = bills.map(bill => {
     const personTotals = bill.shares.map(share => {
       const itemsTotal = share.claims.reduce((sum, claim) => {
@@ -107,15 +118,32 @@ export default function DashboardPage() {
       };
     });
     
+    // Get payments from shares (new format)
+    const payments: Payment[] = bill.shares
+      .filter(s => s.amountPaid > 0)
+      .map(s => ({
+        name: s.name,
+        amount: s.amountPaid,
+      }));
+    
+    // If no payments recorded, fall back to first person (legacy behavior)
+    const hasPayments = payments.length > 0;
+    
     return {
       bill,
       personTotals,
-      paidBy: bill.shares[0]?.name || 'Unknown',
+      // Use payments array if available, otherwise fall back to paidBy
+      payments: hasPayments ? payments : undefined,
+      paidBy: hasPayments ? undefined : bill.shares[0]?.name || 'Unknown',
     };
   });
 
   const balances = calculateBalances(billsWithTotals.filter(b => b.personTotals.length > 0));
   const settlements = suggestSettlements(balances);
+  
+  // Calculate total paid across all bills
+  const totalPaid = bills.reduce((sum, bill) => 
+    sum + bill.shares.reduce((s, share) => s + (share.amountPaid || 0), 0), 0);
 
   if (isLoading) {
     return (
@@ -192,7 +220,12 @@ export default function DashboardPage() {
               </Card>
             ) : (
               <div className="space-y-3">
-                {bills.map((bill) => (
+                {bills.map((bill) => {
+                  const userIsCreator = isCreator(bill);
+                  const userIsParticipant = isParticipant(bill);
+                  const totalBillPaid = bill.shares.reduce((s, share) => s + (share.amountPaid || 0), 0);
+                  
+                  return (
                   <Card
                     key={bill.id}
                     className="p-4 bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 transition-colors"
@@ -208,6 +241,21 @@ export default function DashboardPage() {
                               Locked
                             </Badge>
                           )}
+                          {bill.requiresAuth && userIsCreator && (
+                            <Badge variant="outline" className="text-xs border-emerald-500/50 text-emerald-400">
+                              Creator
+                            </Badge>
+                          )}
+                          {bill.requiresAuth && !userIsCreator && userIsParticipant && (
+                            <Badge variant="outline" className="text-xs border-blue-500/50 text-blue-400">
+                              Participant
+                            </Badge>
+                          )}
+                          {!bill.requiresAuth && (
+                            <Badge variant="outline" className="text-xs border-zinc-600 text-zinc-400">
+                              Legacy
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex items-center gap-4 text-sm text-zinc-500">
                           <span>
@@ -218,6 +266,11 @@ export default function DashboardPage() {
                           </span>
                           <span>{bill.items.length} items</span>
                           <span>{bill.shares.length} people</span>
+                          {bill.requiresAuth && totalBillPaid > 0 && (
+                            <span className="text-emerald-400">
+                              {formatCurrency(totalBillPaid)} paid
+                            </span>
+                          )}
                         </div>
                       </div>
                       
@@ -258,7 +311,8 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   </Card>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

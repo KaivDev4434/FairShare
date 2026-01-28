@@ -3,8 +3,13 @@
 import { signIn } from "next-auth/react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-export default function SignInPage() {
+function SignInContent() {
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl') || '/';
+  
   return (
     <main className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
       {/* Background effects */}
@@ -66,7 +71,7 @@ export default function SignInPage() {
         {/* Sign in buttons */}
         <div className="space-y-4">
           <motion.button
-            onClick={() => signIn("google", { callbackUrl: "/" })}
+            onClick={() => signIn("google", { callbackUrl })}
             className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-xl bg-white text-zinc-900 font-semibold text-lg shadow-lg shadow-white/10 hover:shadow-xl hover:shadow-white/20 transition-all duration-300"
             whileHover={{ scale: 1.02, y: -2 }}
             whileTap={{ scale: 0.98 }}
@@ -84,7 +89,7 @@ export default function SignInPage() {
           </motion.button>
 
           <motion.button
-            onClick={() => signIn("github", { callbackUrl: "/" })}
+            onClick={() => signIn("github", { callbackUrl })}
             className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-xl bg-zinc-800 text-white font-semibold text-lg border border-zinc-700 hover:bg-zinc-750 hover:border-zinc-600 transition-all duration-300"
             whileHover={{ scale: 1.02, y: -2 }}
             whileTap={{ scale: 0.98 }}
@@ -135,5 +140,17 @@ export default function SignInPage() {
         </motion.div>
       </motion.div>
     </main>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+      </div>
+    }>
+      <SignInContent />
+    </Suspense>
   );
 }
