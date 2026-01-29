@@ -12,17 +12,18 @@ datasource db {
 
 // NextAuth.js Models
 model User {
-  id            String    @id @default(cuid())
+  id            String     @id @default(cuid())
   name          String?
-  email         String    @unique
+  email         String     @unique
   emailVerified DateTime?
   image         String?
   accounts      Account[]
   sessions      Session[]
-  bills         Bill[]    // Bills created by this user
-  shares        Share[]   // Bills this user participates in
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  bills         Bill[]     // Bills created by this user
+  shares        Share[]    // Bills this user participates in
+  categories    Category[] // Custom categories created by this user
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 }
 
 model Account {
@@ -80,13 +81,31 @@ model Bill {
 }
 
 model Item {
-  id       String  @id @default(cuid())
-  name     String
-  price    Float
-  quantity Int     @default(1)
-  billId   String
-  bill     Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
-  claims   Claim[]
+  id         String    @id @default(cuid())
+  name       String
+  price      Float
+  quantity   Int       @default(1)
+  billId     String
+  bill       Bill      @relation(fields: [billId], references: [id], onDelete: Cascade)
+  claims     Claim[]
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+}
+
+// Category system with parent-child hierarchy
+model Category {
+  id        String     @id @default(cuid())
+  name      String     // Display name: "Restaurants"
+  slug      String     @unique // Normalized key: "food-restaurants"
+  icon      String?    // Optional emoji or icon name
+  color     String?    // Optional color for UI (hex or tailwind class)
+  parentId  String?    // Parent category ID (null for top-level)
+  parent    Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Category[] @relation("CategoryHierarchy")
+  items     Item[]
+  userId    String?    // null = global/predefined, set = user-created custom category
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
 }
 
 model Share {

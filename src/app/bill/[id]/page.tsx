@@ -38,11 +38,25 @@ function useDebounce<T extends (...args: Parameters<T>) => void>(
   }, [callback, delay]) as T;
 }
 
+interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  color?: string | null;
+  parent?: {
+    id: string;
+    name: string;
+    slug: string;
+    color?: string | null;
+  } | null;
+}
+
 interface Item {
   id: string;
   name: string;
   price: number;
   quantity: number;
+  category?: Category | null;
 }
 
 interface Claim {
@@ -442,6 +456,54 @@ export default function BillPage() {
     }
   };
 
+  const [isCategorizing, setIsCategorizing] = useState(false);
+  
+  const handleCategorizeItems = async () => {
+    if (!bill) return;
+    
+    // Check if there are items without categories
+    const uncategorizedItems = bill.items.filter(item => !item.category);
+    if (uncategorizedItems.length === 0) {
+      toast.info('All items already have categories');
+      return;
+    }
+    
+    setIsCategorizing(true);
+    try {
+      // Get existing items and trigger re-categorization by sending them without categoryId
+      const itemsToUpdate = bill.items.map(item => ({
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        // Only preserve categoryId if item already has a category
+        categoryId: item.category?.id || null,
+      }));
+      
+      // For uncategorized items, explicitly set categoryId to null to trigger auto-categorization
+      const itemsForPatch = itemsToUpdate.map(item => ({
+        ...item,
+        categoryId: item.categoryId || undefined, // undefined will trigger auto-categorization
+      }));
+      
+      const response = await fetch(`/api/bills/${billId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: itemsForPatch }),
+      });
+      
+      if (response.ok) {
+        await fetchBill();
+        toast.success(`Categorized ${uncategorizedItems.length} items!`);
+      } else {
+        throw new Error('Failed to categorize');
+      }
+    } catch (error) {
+      toast.error('Failed to categorize items');
+    } finally {
+      setIsCategorizing(false);
+    }
+  };
+
   const handleAddItem = async () => {
     if (!newItemName.trim()) {
       toast.error('Please enter an item name');
@@ -798,20 +860,47 @@ export default function BillPage() {
             {/* Items */}
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Items</h2>
-              {/* Only creator can add items (for auth-required bills) or anyone (for legacy bills) */}
-              {!bill.locked && (!bill.requiresAuth || bill.isCreator) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowAddItemDialog(true)}
-                  className="border-zinc-700"
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Item
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                {/* Categorize button - show if there are uncategorized items */}
+                {!bill.locked && (!bill.requiresAuth || bill.isCreator) && 
+                  bill.items.some(item => !item.category) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCategorizeItems}
+                    disabled={isCategorizing}
+                    className="border-zinc-700 text-zinc-400"
+                  >
+                    {isCategorizing ? (
+                      <>
+                        <div className="w-4 h-4 mr-2 border-2 border-zinc-500 border-t-emerald-500 rounded-full animate-spin" />
+                        Categorizing...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
+                        </svg>
+                        Categorize
+                      </>
+                    )}
+                  </Button>
+                )}
+                {/* Only creator can add items (for auth-required bills) or anyone (for legacy bills) */}
+                {!bill.locked && (!bill.requiresAuth || bill.isCreator) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAddItemDialog(true)}
+                    className="border-zinc-700"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Item
+                  </Button>
+                )}
+              </div>
             </div>
             <SelectionGrid
               items={bill.items}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { categorizeItems } from '@/lib/categorize';
 
 // Helper to check if user owns the bill
 async function checkOwnership(billId: string, userId: string | undefined): Promise<boolean> {
@@ -28,6 +29,13 @@ export async function GET(
             claims: {
               include: {
                 share: true,
+              },
+            },
+            category: {
+              include: {
+                parent: {
+                  select: { id: true, name: true, slug: true, color: true },
+                },
               },
             },
           },
@@ -117,14 +125,49 @@ export async function PATCH(
         }
       }
       
+      // Auto-categorize items that don't have a categoryId
+      let categorizedItems: Array<{ name: string; price: number; quantity: number; categoryId?: string | null }> = 
+        items.map((item: { name: string; price: number; quantity?: number; categoryId?: string | null }) => ({
+          name: item.name.trim(),
+          price: item.price,
+          quantity: item.quantity || 1,
+          categoryId: item.categoryId || null,
+        }));
+      
+      // Find items that need categorization
+      const itemsNeedingCategorization = categorizedItems.filter(item => !item.categoryId);
+      
+      if (itemsNeedingCategorization.length > 0) {
+        try {
+          const suggestions = await categorizeItems(
+            itemsNeedingCategorization.map(item => ({ name: item.name, price: item.price })),
+            session?.user?.id
+          );
+          
+          // Map category IDs to items that needed categorization
+          let suggestionIndex = 0;
+          categorizedItems = categorizedItems.map(item => {
+            if (!item.categoryId && suggestionIndex < suggestions.length) {
+              const suggestion = suggestions[suggestionIndex++];
+              return { ...item, categoryId: suggestion?.categoryId || null };
+            }
+            return item;
+          });
+          console.log('[Bills PATCH] Auto-categorized', itemsNeedingCategorization.length, 'items');
+        } catch (catError) {
+          console.log('[Bills PATCH] Auto-categorization failed:', catError);
+        }
+      }
+      
       // Delete existing items and recreate
       await db.item.deleteMany({ where: { billId: id } });
       
       updateData.items = {
-        create: items.map((item: { name: string; price: number; quantity?: number }) => ({
-          name: item.name.trim(),
+        create: categorizedItems.map((item) => ({
+          name: item.name,
           price: item.price,
-          quantity: item.quantity || 1,
+          quantity: item.quantity,
+          categoryId: item.categoryId || null,
         })),
       };
       
@@ -142,7 +185,17 @@ export async function PATCH(
       where: { id },
       data: updateData,
       include: {
-        items: true,
+        items: {
+          include: {
+            category: {
+              include: {
+                parent: {
+                  select: { id: true, name: true, slug: true, color: true },
+                },
+              },
+            },
+          },
+        },
         shares: {
           include: {
             claims: true,

@@ -4,6 +4,7 @@ import { useState, useCallback, memo } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -14,11 +15,25 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 
+interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  color?: string | null;
+  parent?: {
+    id: string;
+    name: string;
+    slug: string;
+    color?: string | null;
+  } | null;
+}
+
 interface Item {
   id: string;
   name: string;
   price: number;
   quantity: number;
+  category?: Category | null;
 }
 
 interface Share {
@@ -91,6 +106,22 @@ export const SelectionGrid = memo(function SelectionGrid({
     }).format(amount);
   };
 
+  // Category color mapping
+  const getCategoryColor = (color?: string | null) => {
+    const colorMap: Record<string, string> = {
+      orange: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+      blue: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+      purple: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+      pink: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
+      yellow: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+      red: 'bg-red-500/20 text-red-400 border-red-500/30',
+      cyan: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+      indigo: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+      gray: 'bg-zinc-500/20 text-zinc-400 border-zinc-500/30',
+    };
+    return colorMap[color || 'gray'] || colorMap.gray;
+  };
+
   // Check if current user has any claims for an item
   const isItemSelectedByCurrentUser = useCallback((itemId: string): boolean => {
     if (!currentShareId) return false;
@@ -131,7 +162,17 @@ export const SelectionGrid = memo(function SelectionGrid({
                     />
                   )}
                   <div>
-                    <p className="font-medium">{item.name}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium">{item.name}</p>
+                      {item.category && (
+                        <Badge 
+                          variant="outline" 
+                          className={`text-xs px-1.5 py-0 ${getCategoryColor(item.category.parent?.color || item.category.color)}`}
+                        >
+                          {item.category.name}
+                        </Badge>
+                      )}
+                    </div>
                     <p className="text-sm text-zinc-500">
                       {item.quantity > 1 ? `${item.quantity} × ` : ''}
                       {formatCurrency(item.price)}

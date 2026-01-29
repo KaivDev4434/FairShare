@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { categorizeItems } from '@/lib/categorize';
 
 // GET /api/bills - List all bills (filtered by ownership or participation)
 export async function GET() {
@@ -26,7 +27,17 @@ export async function GET() {
       where: whereClause,
       orderBy: { createdAt: 'desc' },
       include: {
-        items: true,
+        items: {
+          include: {
+            category: {
+              include: {
+                parent: {
+                  select: { id: true, name: true, slug: true, color: true },
+                },
+              },
+            },
+          },
+        },
         shares: {
           include: {
             claims: true,
@@ -98,6 +109,32 @@ export async function POST(request: NextRequest) {
     // Calculate total if not provided
     const calculatedTotal = total ?? (calculatedSubtotal + taxAmount + tipAmount);
     
+    // Auto-categorize items using the categorization function
+    let categorizedItems: Array<{ name: string; price: number; quantity: number; categoryId?: string | null }> = 
+      items.map((item: { name: string; price: number; quantity?: number }) => ({
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity || 1,
+        categoryId: null,
+      }));
+    
+    try {
+      const suggestions = await categorizeItems(
+        categorizedItems.map(item => ({ name: item.name, price: item.price })),
+        session?.user?.id
+      );
+      
+      // Map category IDs to items
+      categorizedItems = categorizedItems.map((item, index) => ({
+        ...item,
+        categoryId: suggestions[index]?.categoryId || null,
+      }));
+      console.log('[Bills] Auto-categorized', categorizedItems.length, 'items');
+    } catch (catError) {
+      // Categorization is optional - continue without it
+      console.log('[Bills] Auto-categorization failed, continuing without categories:', catError);
+    }
+    
     const bill = await db.bill.create({
       data: {
         name,
@@ -108,15 +145,26 @@ export async function POST(request: NextRequest) {
         // Link to user if logged in
         userId: session?.user?.id || null,
         items: {
-          create: items.map((item: { name: string; price: number; quantity?: number }) => ({
+          create: categorizedItems.map((item) => ({
             name: item.name,
             price: item.price,
             quantity: item.quantity || 1,
+            categoryId: item.categoryId || null,
           })),
         },
       },
       include: {
-        items: true,
+        items: {
+          include: {
+            category: {
+              include: {
+                parent: {
+                  select: { id: true, name: true, slug: true, color: true },
+                },
+              },
+            },
+          },
+        },
         shares: true,
       },
     });
