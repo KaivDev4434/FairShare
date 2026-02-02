@@ -62,24 +62,24 @@ function distributeRemainder(
   targetTotal: number
 ): number[] {
   if (values.length === 0) return [];
-  
+
   // Convert to cents for precise integer math
   const targetCents = Math.round(targetTotal * 100);
-  
+
   // Floor all values and track remainders
   const floored = values.map(v => ({
     index: v.index,
     cents: Math.floor(v.exact * 100),
     remainder: (v.exact * 100) - Math.floor(v.exact * 100),
   }));
-  
+
   // Calculate how many pennies we need to distribute
   const flooredSum = floored.reduce((sum, v) => sum + v.cents, 0);
   let penniesToDistribute = targetCents - flooredSum;
-  
+
   // Sort by remainder (descending) to give pennies to those with largest remainders
   const sortedByRemainder = [...floored].sort((a, b) => b.remainder - a.remainder);
-  
+
   // Distribute pennies one at a time to those with largest remainders
   for (const item of sortedByRemainder) {
     if (penniesToDistribute <= 0) break;
@@ -89,13 +89,13 @@ function distributeRemainder(
       penniesToDistribute -= 1;
     }
   }
-  
+
   // Convert back to dollars and return in original order
   const result = new Array(values.length).fill(0);
   for (const item of floored) {
     result[item.index] = item.cents / 100;
   }
-  
+
   return result;
 }
 
@@ -111,7 +111,7 @@ export function calculateSplits(bill: BillWithDetails): PersonTotal[] {
     }
     itemPortions[claim.itemId] += claim.portion;
   }
-  
+
   // First pass: calculate exact (unrounded) amounts for each person
   const exactResults: {
     share: Share;
@@ -122,29 +122,29 @@ export function calculateSplits(bill: BillWithDetails): PersonTotal[] {
     exactGrandTotal: number;
     itemBreakdown: PersonTotal['itemBreakdown'];
   }[] = [];
-  
+
   const billSubtotal = bill.subtotal || bill.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-  
+
   for (const share of bill.shares) {
     const shareClaims = bill.claims.filter(c => c.shareId === share.id);
-    
+
     let exactItemsTotal = 0;
     const itemBreakdown: PersonTotal['itemBreakdown'] = [];
-    
+
     for (const claim of shareClaims) {
       const item = bill.items.find(i => i.id === claim.itemId);
       if (!item) continue;
-      
+
       const totalItemCost = item.price * item.quantity;
       const totalPortions = itemPortions[item.id] || 1;
-      
+
       // Calculate this person's exact share of the item (no rounding yet)
       const amountOwed = (totalItemCost * claim.portion) / totalPortions;
       exactItemsTotal += amountOwed;
-      
+
       // Count how many people are sharing this item
       const sharedWith = bill.claims.filter(c => c.itemId === item.id).length;
-      
+
       itemBreakdown.push({
         itemId: item.id,
         itemName: item.name,
@@ -154,12 +154,12 @@ export function calculateSplits(bill: BillWithDetails): PersonTotal[] {
         sharedWith,
       });
     }
-    
+
     // Calculate proportional tax and tip (exact values)
     const proportion = billSubtotal > 0 ? exactItemsTotal / billSubtotal : 0;
     const exactTaxShare = bill.taxAmount * proportion;
     const exactTipShare = bill.tipAmount * proportion;
-    
+
     exactResults.push({
       share,
       claims: shareClaims,
@@ -170,29 +170,43 @@ export function calculateSplits(bill: BillWithDetails): PersonTotal[] {
       itemBreakdown,
     });
   }
-  
+
   // Calculate what the total should be (sum of claimed items + tax + tip)
   const totalClaimedItems = exactResults.reduce((sum, r) => sum + r.exactItemsTotal, 0);
   const targetTotal = totalClaimedItems + bill.taxAmount + bill.tipAmount;
-  
+
+  // Filter to only include people with non-zero amounts for penny distribution
+  // This fixes issue #9: people with no claims should always show $0.00
+  const nonZeroResults = exactResults
+    .map((r, i) => ({ result: r, originalIndex: i }))
+    .filter(({ result }) => result.exactGrandTotal > 0);
+
   // Use Largest Remainder Method to distribute pennies fairly for grand totals
-  const grandTotalValues = exactResults.map((r, i) => ({
+  // Only apply to people who have claimed items
+  const grandTotalValues = nonZeroResults.map(({ result }, i) => ({
     index: i,
-    exact: r.exactGrandTotal,
+    exact: result.exactGrandTotal,
   }));
   const distributedGrandTotals = distributeRemainder(grandTotalValues, targetTotal);
-  
+
+  // Create a map of distributed totals by original index
+  const distributedTotalsMap = new Map<number, number>();
+  nonZeroResults.forEach(({ originalIndex }, i) => {
+    distributedTotalsMap.set(originalIndex, distributedGrandTotals[i]);
+  });
+
   // Build final results with fair penny distribution
+  // People with no claims get exactly $0.00
   const results: PersonTotal[] = exactResults.map((r, i) => ({
     shareId: r.share.id,
     name: r.share.name,
     itemsTotal: Math.round(r.exactItemsTotal * 100) / 100,
     taxShare: Math.round(r.exactTaxShare * 100) / 100,
     tipShare: Math.round(r.exactTipShare * 100) / 100,
-    grandTotal: distributedGrandTotals[i], // Use the fairly distributed total
+    grandTotal: distributedTotalsMap.get(i) ?? 0, // Use distributed total or $0.00 for no claims
     itemBreakdown: r.itemBreakdown,
   }));
-  
+
   return results;
 }
 
@@ -226,7 +240,7 @@ export function calculateBillBalances(
   payments: Payment[]
 ): Balance[] {
   const balances: Record<string, number> = {};
-  
+
   // Each person owes their share (negative balance)
   for (const person of personTotals) {
     if (!balances[person.name]) {
@@ -234,7 +248,7 @@ export function calculateBillBalances(
     }
     balances[person.name] -= person.grandTotal;
   }
-  
+
   // Each payer is owed what they paid (positive balance)
   for (const payment of payments) {
     if (!balances[payment.name]) {
@@ -242,7 +256,7 @@ export function calculateBillBalances(
     }
     balances[payment.name] += payment.amount;
   }
-  
+
   return Object.entries(balances).map(([name, amount]) => ({
     personName: name,
     amount: Math.round(amount * 100) / 100,
@@ -257,7 +271,7 @@ export function calculateBalances(
   bills: { personTotals: PersonTotal[]; paidBy?: string; payments?: Payment[] }[]
 ): Balance[] {
   const balances: Record<string, number> = {};
-  
+
   for (const bill of bills) {
     // Each person owes their share
     for (const person of bill.personTotals) {
@@ -266,7 +280,7 @@ export function calculateBalances(
       }
       balances[person.name] -= person.grandTotal;
     }
-    
+
     // Handle payments - support both legacy (paidBy) and new (payments array) format
     if (bill.payments && bill.payments.length > 0) {
       // New format: multiple payers with specific amounts
@@ -285,7 +299,7 @@ export function calculateBalances(
       balances[bill.paidBy] += totalBill;
     }
   }
-  
+
   return Object.entries(balances).map(([name, amount]) => ({
     personName: name,
     amount: Math.round(amount * 100) / 100,
@@ -298,28 +312,28 @@ export function calculateBalances(
  */
 export function suggestSettlements(balances: Balance[]): Settlement[] {
   const settlements: Settlement[] = [];
-  
+
   // Separate into creditors (positive balance) and debtors (negative balance)
   const creditors = balances
     .filter(b => b.amount > 0.01)
     .map(b => ({ ...b }))
     .sort((a, b) => b.amount - a.amount);
-  
+
   const debtors = balances
     .filter(b => b.amount < -0.01)
     .map(b => ({ ...b, amount: Math.abs(b.amount) }))
     .sort((a, b) => b.amount - a.amount);
-  
+
   // Greedy matching
   let i = 0;
   let j = 0;
-  
+
   while (i < creditors.length && j < debtors.length) {
     const creditor = creditors[i];
     const debtor = debtors[j];
-    
+
     const amount = Math.min(creditor.amount, debtor.amount);
-    
+
     if (amount > 0.01) {
       settlements.push({
         from: debtor.personName,
@@ -327,14 +341,14 @@ export function suggestSettlements(balances: Balance[]): Settlement[] {
         amount: Math.round(amount * 100) / 100,
       });
     }
-    
+
     creditor.amount -= amount;
     debtor.amount -= amount;
-    
+
     if (creditor.amount < 0.01) i++;
     if (debtor.amount < 0.01) j++;
   }
-  
+
   return settlements;
 }
 
