@@ -7,10 +7,10 @@ import { categorizeItems } from '@/lib/categorize';
 export async function GET() {
   try {
     const session = await auth();
-    
+
     // Build where clause based on authentication
     let whereClause = {};
-    
+
     if (session?.user?.id) {
       // Logged in: show bills where user is owner OR participant
       whereClause = {
@@ -21,8 +21,8 @@ export async function GET() {
         ],
       };
     }
-    // If not logged in: show all bills (for backwards compat / guest mode)
-    
+    // If not logged in: show all bills (for backwards compat with legacy bills)
+
     const bills = await db.bill.findMany({
       where: whereClause,
       orderBy: { createdAt: 'desc' },
@@ -45,7 +45,7 @@ export async function GET() {
         },
       },
     });
-    
+
     return NextResponse.json(bills);
   } catch (error) {
     console.error('Error fetching bills:', error);
@@ -62,21 +62,21 @@ export async function POST(request: NextRequest) {
     const session = await auth();
     const body = await request.json();
     const { name, items, taxAmount = 0, tipAmount = 0, subtotal, total } = body;
-    
+
     if (!name || typeof name !== 'string' || !name.trim()) {
       return NextResponse.json(
         { error: 'Bill name is required' },
         { status: 400 }
       );
     }
-    
+
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
         { error: 'At least one item is required' },
         { status: 400 }
       );
     }
-    
+
     // Validate all items
     for (const item of items) {
       if (!item.name || typeof item.name !== 'string' || !item.name.trim()) {
@@ -98,32 +98,32 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-    
+
     // Calculate subtotal if not provided
     const calculatedSubtotal = subtotal ?? items.reduce(
-      (sum: number, item: { price: number; quantity?: number }) => 
+      (sum: number, item: { price: number; quantity?: number }) =>
         sum + item.price * (item.quantity || 1),
       0
     );
-    
+
     // Calculate total if not provided
     const calculatedTotal = total ?? (calculatedSubtotal + taxAmount + tipAmount);
-    
+
     // Auto-categorize items using the categorization function
-    let categorizedItems: Array<{ name: string; price: number; quantity: number; categoryId?: string | null }> = 
+    let categorizedItems: Array<{ name: string; price: number; quantity: number; categoryId?: string | null }> =
       items.map((item: { name: string; price: number; quantity?: number }) => ({
         name: item.name,
         price: item.price,
         quantity: item.quantity || 1,
         categoryId: null,
       }));
-    
+
     try {
       const suggestions = await categorizeItems(
         categorizedItems.map(item => ({ name: item.name, price: item.price })),
         session?.user?.id
       );
-      
+
       // Map category IDs to items
       categorizedItems = categorizedItems.map((item, index) => ({
         ...item,
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
       // Categorization is optional - continue without it
       console.log('[Bills] Auto-categorization failed, continuing without categories:', catError);
     }
-    
+
     const bill = await db.bill.create({
       data: {
         name,
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
         shares: true,
       },
     });
-    
+
     return NextResponse.json(bill, { status: 201 });
   } catch (error) {
     console.error('Error creating bill:', error);
