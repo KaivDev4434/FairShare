@@ -23,7 +23,10 @@
 | ⚖️ **Fair Splitting** | Each person selects their items with custom portion support |
 | 💰 **Penny-Perfect Math** | Uses Largest Remainder Method for exact splits |
 | 🔗 **Shareable Links** | Share bills with roommates via unique links |
-| 📊 **Dashboard** | View all bills and settlement suggestions |
+| 📊 **Dashboard & Analytics** | View all bills, spending charts, and settlement suggestions |
+| 🔐 **User Authentication** | Sign in with Google/GitHub OAuth |
+| 🏷️ **Categories** | Auto/manual categorization of expenses |
+| 💳 **Payment Tracking** | Record payments with validation |
 | 🔓 **Lock/Unlock Bills** | Lock bills when done, unlock to make changes |
 | ➕ **Add Items Anytime** | Add items manually even while people are selecting |
 
@@ -168,7 +171,7 @@ docker logs fairshare-tunnel 2>&1 | grep trycloudflare
 
 ## 🗺️ Roadmap
 
-### v1.0 — Current Release ✅
+### v1.0 — Initial Release ✅
 - [x] Receipt scanning (PDF/Image)
 - [x] AI-powered item extraction
 - [x] Fair bill splitting with penny-perfect math
@@ -177,18 +180,19 @@ docker logs fairshare-tunnel 2>&1 | grep trycloudflare
 - [x] Lock/unlock bills
 - [x] Add items manually anytime
 
-### v1.1 — UX Improvements 🔜
+### v2.0 — Current Release ✅
+- [x] **User Authentication** — Sign in with Google/GitHub OAuth
+- [x] **Access Management** — See only bills you own or participate in
+- [x] **Personal Analytics** — Track your expenses over time with spending charts
+- [x] **Categories** — Auto/manual categorization of expenses
+- [x] **Payment Tracking** — Record and validate payments on bills
+- [x] **Dashboard Revamp** — New sidebar navigation, stats cards, and improved UX
+
+### v2.1 — UX Improvements 🔜
 - [ ] **Sticky Selected User Total** — Show the selected user's total box pinned at the top
 - [ ] **Performance Optimization** — Reduce lag and improve responsiveness
 
-### v2.0 — Planned Features 🚧
-- [x] **User Authentication** — Sign in with Google/GitHub OAuth
-- [ ] **User Profiles** — Track your personal spending history
-- [ ] **Access Management** — See only bills you own or participate in
-- [ ] **Personal Analytics** — Track your expenses over time
-
 ### v3.0 — Future Ideas 💡
-- [ ] **Tags & Categories** — Auto/manual categorization of expenses
 - [ ] **Recurring Expenses** — Handle monthly bills like utilities
 - [ ] **Payment Integration** — Settle up with Venmo/PayPal links
 - [ ] **Mobile App** — React Native companion app
